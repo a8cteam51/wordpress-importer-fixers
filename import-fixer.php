@@ -79,6 +79,11 @@ class Import_Fixer extends WP_CLI_Command {
 				WP_CLI::line( "Skipping post #$post_id since there is no origin set." );
 				continue;
 			}
+			// If no original_thumbnail_id is set, move on.
+			if ( empty( $original_thumbnail_id ) ) {
+				WP_CLI::line( "Skipping post #$post_id since there is no original thumbnail ID set." );
+				continue;
+			}
 
 			// get potentially lost thumbnail
 			$lost_thumbnail_id = $all_attachment_ids[ $original_import_origin ][ $original_thumbnail_id ];
