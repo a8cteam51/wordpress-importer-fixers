@@ -33,6 +33,9 @@ class Import_Fixer extends WP_CLI_Command {
 	 */
 	public function fix_thumbnails_contextually( $args, $assoc_args ) {
 		$post_types = get_post_types();
+		if ( false !== ( $key = array_search( 'attachment', $post_types, true ) ) ) {
+			unset( $post_types[ $key ] );
+		}
 
 		$all_post_ids = get_posts( array( 'posts_per_page' => -1, 'fields' => 'ids', 'post_type' => $post_types, 'post_status' => 'any' ) );
 
