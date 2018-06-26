@@ -32,12 +32,25 @@ class Import_Fixer extends WP_CLI_Command {
 	 * @synopsis [--origin=<import-origin>]
 	 */
 	public function fix_thumbnails_contextually( $args, $assoc_args ) {
-		$post_types = get_post_types();
-		if ( false !== ( $key = array_search( 'attachment', $post_types, true ) ) ) {
-			unset( $post_types[ $key ] );
-		}
+		$all_post_types = get_post_types();
 
-		$all_post_ids = get_posts( array( 'posts_per_page' => -1, 'fields' => 'ids', 'post_type' => $post_types, 'post_status' => 'any' ) );
+		$excluded_post_types = array( 'attachment', 'revision', 'custom_css', 'customize_changeset', 'oembed_cache', 'nav_menu_item' );
+
+		$post_types = array_diff( $all_post_types, $excluded_post_types );
+
+		// Get the IDs of all posts in the specified post types that have a import origin meta field set
+		$all_post_ids = get_posts( array(
+			'posts_per_page' => -1,
+			'fields'         => 'ids',
+			'post_type'      => $post_types,
+			'post_status'    => 'any',
+			'meta_query'     => array(
+				array(
+					'key'     => '_original_import_origin',
+					'compare' => 'EXISTS',
+				),
+			),
+		) );
 
 		$all_attachment_ids = array();
 
@@ -77,9 +90,9 @@ class Import_Fixer extends WP_CLI_Command {
 
 			$original_import_origin = get_post_meta( $post_id, '_original_import_origin', true );
 
-			// If no origin is set, move on.
-			if( empty( $original_import_origin ) ) {
-				WP_CLI::line( "Skipping post #$post_id since there is no origin set." );
+			// If no origin is set or if there's no index of attachments using it, move on.
+			if ( empty( $original_import_origin ) || empty( $all_attachment_ids[ $original_import_origin ] ) ) {
+				WP_CLI::line( "Skipping post #$post_id since there is no origin set or it is different from the one specified." );
 				continue;
 			}
 			// If no original_thumbnail_id is set, move on.
