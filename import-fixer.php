@@ -102,16 +102,17 @@ class Import_Fixer extends WP_CLI_Command {
 			}
 
 			// get potentially lost thumbnail
-			$lost_thumbnail_id = $all_attachment_ids[ $original_import_origin ][ $original_thumbnail_id ];
+			if ( ! empty( $all_attachment_ids[ $original_import_origin ][ $original_thumbnail_id ] ) ) {
+				$lost_thumbnail_id = $all_attachment_ids[ $original_import_origin ][ $original_thumbnail_id ];
 
-			if( $lost_thumbnail_id == get_post_meta( $post_id, '_thumbnail_id', true ) ) {
-				WP_CLI::line( "Skipping updating post #$post_id since the thumbnail is already correct." );
-				continue;
-			}
+				if( $lost_thumbnail_id == get_post_meta( $post_id, '_thumbnail_id', true ) ) {
+					WP_CLI::line( "Skipping updating post #$post_id since the thumbnail is already correct." );
+					continue;
+				}
 
-			if( ! empty( $lost_thumbnail_id ) ) {
 				WP_CLI::success( "Updating post #$post_id with thumbnail #" . $lost_thumbnail_id . " (currently #" . get_post_meta( $post_id, '_thumbnail_id', true ) . " for origin '$original_import_origin'" );
 				update_post_meta( $post_id, '_thumbnail_id', $lost_thumbnail_id );
+
 			}
 
 			$count++;
