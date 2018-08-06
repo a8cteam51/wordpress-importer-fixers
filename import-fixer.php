@@ -92,12 +92,12 @@ class Import_Fixer extends WP_CLI_Command {
 
 			// If no origin is set or if there's no index of attachments using it, move on.
 			if ( empty( $original_import_origin ) || empty( $all_attachment_ids[ $original_import_origin ] ) ) {
-				WP_CLI::line( "Skipping post #$post_id since there is no origin set or it is different from the one specified." );
+				WP_CLI::debug( "Skipping post #$post_id since there is no origin set or it is different from the one specified." );
 				continue;
 			}
 			// If no original_thumbnail_id is set, move on.
 			if ( empty( $original_thumbnail_id ) ) {
-				WP_CLI::line( "Skipping post #$post_id since there is no original thumbnail ID set." );
+				WP_CLI::debug( "Skipping post #$post_id since there is no original thumbnail ID set." );
 				continue;
 			}
 
@@ -106,7 +106,7 @@ class Import_Fixer extends WP_CLI_Command {
 				$lost_thumbnail_id = $all_attachment_ids[ $original_import_origin ][ $original_thumbnail_id ];
 
 				if( $lost_thumbnail_id == get_post_meta( $post_id, '_thumbnail_id', true ) ) {
-					WP_CLI::line( "Skipping updating post #$post_id since the thumbnail is already correct." );
+					WP_CLI::debug( "Skipping updating post #$post_id since the thumbnail is already correct." );
 					continue;
 				}
 
@@ -170,7 +170,7 @@ class Import_Fixer extends WP_CLI_Command {
 
             // If no origin is set, move on.
             if( empty( $original_import_origin ) ) {
-                WP_CLI::line( "Skipping post #$post_id since there is no origin set." );
+                WP_CLI::debug( "Skipping post #$post_id since there is no origin set." );
                 continue;
             }
 
@@ -179,7 +179,7 @@ class Import_Fixer extends WP_CLI_Command {
             $current_parent_id = wp_get_post_parent_id( $post_id );
 
             if( $current_parent_id === $lost_parent_id ) {
-                WP_CLI::line( "Skipping updating post #$post_id to parent id #$current_parent_id since the post parent is already correct (#$current_parent_id)." );
+                WP_CLI::debug( "Skipping updating post #$post_id to parent id #$current_parent_id since the post parent is already correct (#$current_parent_id)." );
                 continue;
             }
 
@@ -236,13 +236,13 @@ class Import_Fixer extends WP_CLI_Command {
 					break;
 
 				foreach ( $posts as $the_post ) {
-					WP_CLI::line( "" );
-					WP_CLI::line( "Working on Post ID: {$the_post->ID}" );
+					WP_CLI::debug( "" );
+					WP_CLI::debug( "Working on Post ID: {$the_post->ID}" );
 
 					$original_import_origin = get_post_meta( $the_post->ID, '_original_import_origin', true );
 
 					if ( empty( $original_import_origin ) || ( $original_import_origin !== $origin ) ) {
-						WP_CLI::line( "Skipping post #" . $the_post->ID . " since there is no origin set or it is different from the one specified." );
+						WP_CLI::debug( "Skipping post #" . $the_post->ID . " since there is no origin set or it is different from the one specified." );
 						continue;
 					}
 
