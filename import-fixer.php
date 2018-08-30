@@ -331,7 +331,7 @@ class Import_Fixer extends WP_CLI_Command {
 	}
 
 	/**
-	 *
+	 * Fix post content media URLs
 	 * Sometimes images are imported but not back-filled correctly. This script looks
 	 * at _original_import_url post meta for attachments to get a list of source urls.
 	 * It then finds posts with image URLS that match the original source URL and tries
@@ -339,94 +339,118 @@ class Import_Fixer extends WP_CLI_Command {
 	 * and tries to fix those.
 	 *
 	 * @subcommand fix-media-urls
+	 * @synopsis [--origin=<import-origin>]
 	 */
-	public function fix_media_urls() {
-
-		// Which post meta key should we use to determine where the attachment was originally downloaded from?
-		$meta_key = '_original_import_url';
-
-		WP_CLI::line( "Fixing media urls..." );
+	public function fix_media_urls( $args, $assoc_args ) {
 
 		global $wpdb;
 
-		$counts = array(
-			'posts_checked' => 0,
-			'posts_updated' => 0,
-			'urls'          => 0,
-		);
-		$urls = array();
+		// Allow users to specify a single origin to fix.
+		$origins = ! empty( $assoc_args['origin'] ) ? array( $assoc_args['origin'] ) : Import_Fixer::_get_origins();
 
-		// Get all posts (probably attachments) that have a post meta key matching the import URL key we're using.
-		foreach ( $wpdb->get_results( $wpdb->prepare( "SELECT post_id, meta_value FROM $wpdb->postmeta WHERE meta_key = %s", $meta_key ) ) as $row ) {
+		// Which post meta key should we use to determine where the attachment was originally downloaded from?
+		$old_url_meta_key = '_original_import_url';
+		$origin_meta_key = '_original_import_origin';
 
-			// Multiple imports cause multiple metas to be written sometimes. Skip if we find a duplicate.
-			if ( array_key_exists( $row->meta_value, $urls ) )
-				continue;
+		$excluded_post_types = array( 'attachment', 'revision', 'custom_css', 'customize_changeset', 'oembed_cache', 'nav_menu_item' );
 
-			$urls[ $row->meta_value ] = $row->post_id;
+		$excluded_post_types_sql = "'" . implode( "','", array_map( 'esc_sql', $excluded_post_types ) ) . "'";
 
-		}
+		foreach( $origins as $origin ) {
 
-		// For each matching attachment we found, use the post ID to get the attachment URL as it exists in WordPress now.
-		// Add it to our urls array as the new URL associated with the old/source URL index.
-		foreach ( $urls as $old_url => $id ) {
-			$urls[ $old_url ] = wp_get_attachment_url( $id );
-			$counts['urls']++;
-		}
+			WP_CLI::line( "Fixing media urls for origin $origin:" );
 
-		uksort ( $urls, array( $this, '_cmpr_strlen' ) );
+			$counts = array(
+				'posts_checked' => 0,
+				'posts_updated' => 0,
+				'urls'          => 0,
+			);
 
-		// Search for any post containing an image reference...
-		// TODO: exclude unwanted post types instead of including them
-		// TODO: handle case insensitive search, since <IMG SRC="" /> is valid
-		foreach ( $wpdb->get_results( "SELECT ID, post_title, post_content
-			FROM $wpdb->posts
-			WHERE
-				post_type IN ( 'post', 'page' )
-				AND post_status IN ( 'publish', 'draft', 'private' )
-				AND post_content LIKE '%<img%'"
-		) as $post ) {
+			$urls = array();
 
-			$updated = false;
-			$counts['posts_checked']++;
+			// Get all posts (probably attachments) that have a post meta key matching the import URL key we're using,
+			// and that are in the import origin we're working with.
+			foreach ( $wpdb->get_results( $wpdb->prepare( "SELECT pm1.post_id, pm1.meta_value
+				FROM $wpdb->postmeta pm1
+				INNER JOIN $wpdb->postmeta pm2
+					ON ( pm1.post_id = pm2.post_id
+					AND pm1.meta_key = %s
+					AND pm2.meta_key = %s )
+					WHERE pm2.meta_value = %s",
+				$old_url_meta_key, $origin_meta_key, $origin ) ) as $row ) {
 
-			WP_CLI::line( "Checking post $post->ID: $post->post_title" );
+				// Multiple imports cause multiple metas to be written sometimes. Skip if we find a duplicate.
+				if ( array_key_exists( $row->meta_value, $urls ) )
+					continue;
 
-			$last_post_content = $original_post_content = $post->post_content;
+				$urls[ $row->meta_value ] = $row->post_id;
 
-			// For each URL in our array of attachment URLs to check...
-			foreach ( $urls as $old_url => $new_url ) {
+			}
 
-				// Find and replace the image URL in the post content
-				$post->post_content = str_replace( $old_url, $new_url, $post->post_content );
+			// For each matching attachment we found, use the post ID to get the attachment URL as it exists in WordPress now.
+			// Add it to our urls array as the new URL associated with the old/source URL index.
+			foreach ( $urls as $old_url => $id ) {
+				$urls[ $old_url ] = wp_get_attachment_url( $id );
+				$counts['urls']++;
+			}
 
-				// Handle dimension suffix alternatives
-				$url_exploded_dots = explode( ".", $old_url );
-				$file_extension = array_pop( $url_exploded_dots );
-				$thumbnail_base = implode( ".", $url_exploded_dots );
+			uksort( $urls, array( $this, '_cmpr_strlen' ) );
 
-				$regex = '!' . preg_quote( $thumbnail_base, "!" ) . '-\d+x\d+\.' . preg_quote( $file_extension, "!" ) . '!';
-				$post->post_content = preg_replace( $regex, $new_url, $post->post_content );
+			// Search for any post in our target origin, containing an image reference...
+			foreach ( $wpdb->get_results( $wpdb->prepare( "SELECT ID, post_title, post_content
+				FROM $wpdb->posts
+				LEFT JOIN $wpdb->postmeta
+					ON ( $wpdb->posts.ID = $wpdb->postmeta.post_id
+					AND $wpdb->postmeta.meta_key = %s )
+				WHERE
+					post_type NOT IN ( $excluded_post_types_sql )
+					AND post_status IN ( 'publish', 'draft', 'private' )
+					AND $wpdb->postmeta.meta_value = %s
+					AND LOWER( post_content ) LIKE '%<img%'",
+				$origin_meta_key, $origin
+			) ) as $post ) {
 
-				// If the post was updated, make a note of that.
-				if ( $post->post_content != $last_post_content ) {
-					$updated = true;
+				$updated = false;
+				$counts['posts_checked']++;
 
-					WP_CLI::line( "\t$old_url => $new_url" );
+				WP_CLI::debug( "Checking post $post->ID: $post->post_title" );
 
-					$last_post_content = $post->post_content;
+				$last_post_content = $original_post_content = $post->post_content;
+
+				// For each URL in our array of attachment URLs to check...
+				foreach ( $urls as $old_url => $new_url ) {
+
+					// Find and replace the image URL in the post content
+					$post->post_content = str_replace( $old_url, $new_url, $post->post_content );
+
+					// Handle dimension suffix alternatives
+					$url_exploded_dots = explode( ".", $old_url );
+					$file_extension = array_pop( $url_exploded_dots );
+					$thumbnail_base = implode( ".", $url_exploded_dots );
+
+					$regex = '!' . preg_quote( $thumbnail_base, "!" ) . '-\d+x\d+\.' . preg_quote( $file_extension, "!" ) . '!';
+					$post->post_content = preg_replace( $regex, $new_url, $post->post_content );
+
+					// If the post was updated, make a note of that.
+					if ( $post->post_content != $last_post_content ) {
+						$updated = true;
+
+						WP_CLI::debug( "\t$old_url => $new_url" );
+
+						$last_post_content = $post->post_content;
+					}
+				}
+				if ( true === $updated ) {
+					wp_update_post( $post );
+					clean_post_cache( $post->ID );
+					$counts['posts_updated']++;
+					WP_CLI::debug( "~~~~~~~~~~\n~~POST_ID~~\n$post->ID\n~~ORIGINAL_CONTENT~~\n$original_post_content\n~~NEW_CONTENT~~\n$post->post_content\n~~~~~~~~~~" );
+
 				}
 			}
-			if ( true === $updated ) {
-				wp_update_post( $post );
-				clean_post_cache( $post->ID );
-				$counts['posts_updated']++;
-				WP_CLI::debug( "~~~~~~~~~~\n~~POST_ID~~\n$post->ID\n~~ORIGINAL_CONTENT~~\n$original_post_content\n~~NEW_CONTENT~~\n$post->post_content\n~~~~~~~~~~" );
 
-			}
+			WP_CLI::success( $counts['urls'] . ' URLs found, ' . $counts['posts_checked'] . ' posts checked, ' . $counts['posts_updated'] . ' posts updated.' );
 		}
-
-		WP_CLI::success( $counts['urls'] . ' URLs found, ' . $counts['posts_checked'] . ' posts checked, ' . $counts['posts_updated'] . ' posts updated.' );
 	}
 
 	/**
