@@ -2,9 +2,10 @@
 
 /*
 Plugin Name: Import Fixer
+Plugin URI: https://github.com/a8cteam51/wordpress-importer-fixers/
 Description: Import fixer subcommands for WP CLI
-Author: Spencer Cameron-Morin
-Version: 1.0
+Author: Spencer Cameron-Morin, Chris Hardie, Automattic
+Version: 1.1
 */
 
 if ( ! defined( 'WP_CLI' ) || ! WP_CLI ) {
