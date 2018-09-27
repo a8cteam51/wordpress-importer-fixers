@@ -614,12 +614,12 @@ class Import_Fixer extends WP_CLI_Command {
 			WP_CLI::error( "You can't use --domain and --all-domains." );
 		}
 
-		if( empty( $domain_to_import ) && empty( $all_domains ) ) {
+		if( ( empty( $domain_to_import ) && empty( $all_domains ) ) && empty( $list_only ) ) {
 			WP_CLI::error( "You have specify a domain with --domain or use --all-domains." );
 		}
 
-		if( in_array( $domain_to_import, array( home_url(), site_url() ) ) ) {
-			WP_CLI::line( "You almost certainly don't want to import images with the same domain as your site. You'll duplicate files in your media library. If you do want to do this, you'll need to be more precise and take a different approach." );
+		if( in_array( $domain_to_import, array( parse_url( home_url(), PHP_URL_HOST ), parse_url( site_url(), PHP_URL_HOST ) ) ) ) {
+			WP_CLI::error( "You almost certainly don't want to import images with the same domain as your site. You'll duplicate files in your media library. If you do want to do this, you'll need to be more precise and take a different approach." );
 		}
 
 		if( empty( $list_only ) ) {
@@ -636,21 +636,27 @@ class Import_Fixer extends WP_CLI_Command {
 			// Exclude attachments.
 			unset( $post_types['attachment'] );
 
-			//$post_ids = $wpdb->get_col( $wpdb->prepare( "SELECT ID FROM $wpdb->posts WHERE post_type = '%s'", $post_type ) );
+			foreach( $post_types as $key => $post_type ) {
+				$post_types[ $key ] = "'$post_type'"; 
+			}
+			
+			$post_types = implode( ',', $post_types );
+			// TODO: Build/run the query
 		} else {
 			$post_ids = $wpdb->get_col( $wpdb->prepare( "SELECT ID FROM $wpdb->posts WHERE post_type = '%s'", $post_type ) );
 		}
 
 		if( empty( $post_ids ) ) {
-			WP_CLI::error( "No posts found (for post_type: $post_type)!" );
+			WP_CLI::error( "No posts found for post_type: '$post_type'!" );
 		}
 
 		$total_posts = count( $post_ids );
 		
 		$progress = \WP_CLI\Utils\make_progress_bar( 'Processing posts', $total_posts );
+		$all_image_domains = array();
 
 		foreach( $post_ids as $post_id ) {
-			$progress->tick();
+			//$progress->tick();
 			$post_content = get_post( $post_id )->post_content;
 		 
 			if( empty( $post_content ) ) {
@@ -668,9 +674,31 @@ class Import_Fixer extends WP_CLI_Command {
 				preg_match( '#src="(.*?)"#i', $image_html, $image_src );
 				$image_src = $image_src[1];
 
-				if( ! empty( $domain_to_import ) && $domain_to_import !== parse_url( $image_src, PHP_URL_HOST ) ) {
+				$current_image_domain = parse_url( $image_src, PHP_URL_HOST );
+
+				if( empty( $current_image_domain ) ) {
+					WP_CLI::warning( "Encountered badly formatted image src in post #$post_id: $image_src" );
 					continue;
 				}
+
+				if( in_array( $current_image_domain, array( parse_url( home_url(), PHP_URL_HOST ), parse_url( site_url(), PHP_URL_HOST ) ) ) ) {
+					// Skip importing if the image source domain matches the site's domain.
+					continue;
+				}
+
+				$all_image_domains[] = $current_image_domain;
+
+				// If all we want is to list all the domains, bail here.
+				if( ! empty( $list_only ) ) {
+					continue;
+				}
+
+				// Bail if this isn't the domain we're looking for or if --all-domains is set.
+				if( ! empty( $domain_to_import ) && $domain_to_import !== $current_image_domain ) {
+					continue;
+				}
+
+
 
 				// Make sure the image wasn't already imported.
 				$post_exists = $wpdb->get_var( $wpdb->prepare( "SELECT post_id FROM $wpdb->postmeta WHERE meta_key = '_added_via_script_backup_meta' AND meta_value LIKE '%$image_src%'", $image_src ) );
@@ -682,7 +710,15 @@ class Import_Fixer extends WP_CLI_Command {
 						continue;
 					}
 					$post_content = str_replace( $image_src, $new_src, $post_content );
-					$wpdb->update( $wpdb->posts, array( 'post_content' => $post_content ), array( 'ID' => $post_id ) );
+					$updated = $wpdb->update( $wpdb->posts, array( 'post_content' => $post_content ), array( 'ID' => $post_id ) );
+
+					if( ! empty( $updated ) ) {
+						WP_CLI::line( " -- Found already imported images in post #$post_id. Updating image URLs in post content." );
+						WP_CLI::line( "   -- Replaced image source:" );
+						WP_CLI::line( "     -- Old image URL: $image_src" );
+						WP_CLI::line( "     -- New image URL: $uploaded_image_src" );
+					}
+
 					continue;
 				}
 
@@ -691,7 +727,7 @@ class Import_Fixer extends WP_CLI_Command {
 				} else {
 					$file_array['tmp_name'] = download_url( $image_src );
 				}
-				
+
 				$file_array['name'] = basename( $image_src );
 
 				$attachment_id = media_handle_sideload( $file_array, $post_id );
@@ -713,9 +749,20 @@ class Import_Fixer extends WP_CLI_Command {
 
 				$post_content = str_replace( $image_src, $uploaded_image_src, $post_content );
 				$updated = $wpdb->update( $wpdb->posts, array( 'post_content' => $post_content ), array( 'ID' => $post_id ) );
-				var_dump( $image_src, $uploaded_image_src, $updated );
+				if( ! empty( $updated ) ) {
+					WP_CLI::line( " -- Imported images for post #$post_id." );
+					WP_CLI::line( "   -- Replaced image source:" );
+					WP_CLI::line( "     -- Old image URL: $image_src" );
+					WP_CLI::line( "     -- New image URL: $uploaded_image_src" );
+				}
 			}
 			usleep( 5000 );
+		}
+
+		if( ! empty( $list_only ) ) {
+			foreach( array_unique( $all_image_domains ) as $domain ) {
+				WP_CLI::line( $domain );
+			}
 		}
 	}
 
