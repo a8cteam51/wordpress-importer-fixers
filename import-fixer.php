@@ -569,6 +569,156 @@ class Import_Fixer extends WP_CLI_Command {
 		return $new_ids;
 	}
 
+	/**
+	 * Import external images in post content.
+	 *
+	 * ## OPTIONS
+	 *
+	 * [--list]
+	 * : List domains in post content, but don't do anything else.
+	 *
+	 * [--domain=<domain-to-import-from>]
+	 * : You can specify a single domain to import external images from.
+	 *
+	 * [--all-domains]
+	 * : Import images from any domain.
+	 *
+	 * [--post_type=<post_type|any>]
+	 * : You can provide a single post type here or 'any' (without quotes) to process all public, non-attachment posts. Defaults to 'post'.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     # Get a list of domains in post content (useful for selectively importing where possible domains are unknown).
+	 *     $ wp import-fixer import-external-images --list-domains
+	 *
+	 *     # Import images from example.com.
+	 *     $ wp import-fixer import-external-images --domain=example.com
+	 *
+	 *     # Import images from www.example.com.
+	 *     $ wp import-fixer import-external-images --domain=www.example.com
+	 *
+	 *     # Import images from any domain.
+	 *     $ wp import-fixer import-external-images --all-domains
+	 *   
+	 * @subcommand import-external-images
+	 */
+	public function import_external_images( $args, $assoc_args ) {
+		global $wpdb;
+
+		$list_only = \WP_CLI\Utils\get_flag_value( $assoc_args, 'list' );
+		$domain_to_import = \WP_CLI\Utils\get_flag_value( $assoc_args, 'domain' );
+		$all_domains = \WP_CLI\Utils\get_flag_value( $assoc_args, 'all-domains' );
+		$post_type = \WP_CLI\Utils\get_flag_value( $assoc_args, 'post_type' );
+
+		if( ! empty( $domain_to_import ) && ! empty( $all_domains ) ) {
+			WP_CLI::error( "You can't use --domain and --all-domains." );
+		}
+
+		if( empty( $domain_to_import ) && empty( $all_domains ) ) {
+			WP_CLI::error( "You have specify a domain with --domain or use --all-domains." );
+		}
+
+		if( in_array( $domain_to_import, array( home_url(), site_url() ) ) ) {
+			WP_CLI::line( "You almost certainly don't want to import images with the same domain as your site. You'll duplicate files in your media library. If you do want to do this, you'll need to be more precise and take a different approach." );
+		}
+
+		if( empty( $list_only ) ) {
+			//WP_CLI::confirm( "Make sure you test this on a development site first and have backups in order before running on production. Ready to go?" );
+		}
+
+		if( empty( $post_type ) ) {
+			$post_type = 'post';
+		}
+		
+		if( $post_type === 'any' ) {
+			$post_types = get_post_types( array( 'public' => true ) );
+
+			// Exclude attachments.
+			unset( $post_types['attachment'] );
+
+			//$post_ids = $wpdb->get_col( $wpdb->prepare( "SELECT ID FROM $wpdb->posts WHERE post_type = '%s'", $post_type ) );
+		} else {
+			$post_ids = $wpdb->get_col( $wpdb->prepare( "SELECT ID FROM $wpdb->posts WHERE post_type = '%s'", $post_type ) );
+		}
+
+		if( empty( $post_ids ) ) {
+			WP_CLI::error( "No posts found (for post_type: $post_type)!" );
+		}
+
+		$total_posts = count( $post_ids );
+		
+		$progress = \WP_CLI\Utils\make_progress_bar( 'Processing posts', $total_posts );
+
+		foreach( $post_ids as $post_id ) {
+			$progress->tick();
+			$post_content = get_post( $post_id )->post_content;
+		 
+			if( empty( $post_content ) ) {
+				continue;
+			}
+
+			preg_match_all( '#<img(.*?)>#si', $post_content, $images );
+			if( empty( $images[0] ) ) {
+				continue;
+			}
+		 
+			foreach( $images[0] as $image ) {
+				$matches = array();
+				$image_html = $image;
+				preg_match( '#src="(.*?)"#i', $image_html, $image_src );
+				$image_src = $image_src[1];
+
+				if( ! empty( $domain_to_import ) && $domain_to_import !== parse_url( $image_src, PHP_URL_HOST ) ) {
+					continue;
+				}
+
+				// Make sure the image wasn't already imported.
+				$post_exists = $wpdb->get_var( $wpdb->prepare( "SELECT post_id FROM $wpdb->postmeta WHERE meta_key = '_added_via_script_backup_meta' AND meta_value LIKE '%$image_src%'", $image_src ) );
+
+				if( ! empty( $post_exists ) ) {
+					$new_src = get_post_meta( $post_exists, '_added_via_script_backup_meta', true );
+					$new_src = ! empty( $new_src['new_url'] ) ? $new_src['new_url'] : '';
+					if( empty( $new_src ) ) {
+						continue;
+					}
+					$post_content = str_replace( $image_src, $new_src, $post_content );
+					$wpdb->update( $wpdb->posts, array( 'post_content' => $post_content ), array( 'ID' => $post_id ) );
+					continue;
+				}
+
+				if( empty( parse_url( $image_src, PHP_URL_SCHEME ) ) ) {
+					$file_array['tmp_name'] = download_url( "http:$image_src" );
+				} else {
+					$file_array['tmp_name'] = download_url( $image_src );
+				}
+				
+				$file_array['name'] = basename( $image_src );
+
+				$attachment_id = media_handle_sideload( $file_array, $post_id );
+		 
+				$uploaded_image_src = wp_get_attachment_url( $attachment_id );
+		 
+				if( empty( $uploaded_image_src ) ) {
+					echo " -- Image download failed for '$image_src' on post #$post_id\n";
+					if( is_wp_error( $attachment_id ) ) {
+						var_dump( $attachment_id );
+					}
+					continue;
+				}
+		 
+				update_post_meta( $attachment_id, '_added_via_script_backup_meta', array(
+					'old_url' => $image_src,
+					'new_url' => $uploaded_image_src,
+				));
+
+				$post_content = str_replace( $image_src, $uploaded_image_src, $post_content );
+				$updated = $wpdb->update( $wpdb->posts, array( 'post_content' => $post_content ), array( 'ID' => $post_id ) );
+				var_dump( $image_src, $uploaded_image_src, $updated );
+			}
+			usleep( 5000 );
+		}
+	}
+
 	// sort by strlen, longest string first
 	public static function _cmpr_strlen( $a, $b ) {
 		return strlen( $b ) - strlen( $a );
