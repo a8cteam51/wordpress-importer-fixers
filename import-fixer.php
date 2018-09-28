@@ -724,7 +724,7 @@ class Import_Fixer extends WP_CLI_Command {
 						WP_CLI::line( " -- Found already imported images in post #$post_id. Updating image URLs in post content." );
 						WP_CLI::line( "   -- Replaced image source:" );
 						WP_CLI::line( "     -- Old image URL: $image_src" );
-						WP_CLI::line( "     -- New image URL: $uploaded_image_src" );
+						WP_CLI::line( "     -- New image URL: $new_src" );
 					}
 
 					continue;
