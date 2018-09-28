@@ -586,6 +586,9 @@ class Import_Fixer extends WP_CLI_Command {
 	 * [--post_type=<post_type|any>]
 	 * : You can provide a single post type here or 'any' (without quotes) to process all public, non-attachment posts. Defaults to 'post'.
 	 *
+	 * [--rewind]
+	 * : Reverse image source replacements and delete any imported images added with this command.
+	 *
 	 * ## EXAMPLES
 	 *
 	 *     # Get a list of domains in post content (useful for selectively importing where possible domains are unknown).
@@ -604,6 +607,13 @@ class Import_Fixer extends WP_CLI_Command {
 	 */
 	public function import_external_images( $args, $assoc_args ) {
 		global $wpdb;
+
+		if( ! empty( \WP_CLI\Utils\get_flag_value( $assoc_args, 'rewind' ) ) ) {
+			WP_CLI::line( "Rewinding previous image import (if there was one)." );
+			$this->_import_external_images_rewind();
+			WP_CLI::line( "Done!" );
+			exit;
+		}
 
 		$list_only = \WP_CLI\Utils\get_flag_value( $assoc_args, 'list' );
 		$domain_to_import = \WP_CLI\Utils\get_flag_value( $assoc_args, 'domain' );
@@ -698,8 +708,6 @@ class Import_Fixer extends WP_CLI_Command {
 					continue;
 				}
 
-
-
 				// Make sure the image wasn't already imported.
 				$post_exists = $wpdb->get_var( $wpdb->prepare( "SELECT post_id FROM $wpdb->postmeta WHERE meta_key = '_added_via_script_backup_meta' AND meta_value LIKE '%$image_src%'", $image_src ) );
 
@@ -762,6 +770,26 @@ class Import_Fixer extends WP_CLI_Command {
 		if( ! empty( $list_only ) ) {
 			foreach( array_unique( $all_image_domains ) as $domain ) {
 				WP_CLI::line( $domain );
+			}
+		}
+	}
+
+	public static function _import_external_images_rewind() {
+		global $wpdb;
+
+		$attachment_ids = $wpdb->get_col( "SELECT DISTINCT(post_id) FROM $wpdb->postmeta WHERE meta_key = '_added_via_script_backup_meta'" );
+
+		foreach( $attachment_ids as $attachment_id ) {
+			$meta_backup_urls = get_post_meta( $attachment_id, '_added_via_script_backup_meta', true );
+			var_dump( $meta_backup_urls );
+
+			if( ! empty( $meta_backup_urls['old_url'] ) && ! empty( $meta_backup_urls['new_url'] ) ) {
+				$wpdb->query( $wpdb->prepare( "UPDATE $wpdb->posts SET post_content = REPLACE(post_content, %s, %s )", $meta_backup_urls['new_url'], $meta_backup_urls['old_url'] ) );
+					WP_CLI::line( " -- Reverting URL replacements for attachment #$attachment_id.");
+					WP_CLI::line( "   -- Updating {$meta_backup_urls['new_url']}" );
+					WP_CLI::line( "   -- With {$meta_backup_urls['old_url']}  " );
+					WP_CLI::line( "   -- Deleting attachment #$attachment_id." );
+					wp_delete_post( $attachment_id, true );
 			}
 		}
 	}
