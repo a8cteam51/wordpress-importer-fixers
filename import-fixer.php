@@ -731,11 +731,12 @@ class Import_Fixer extends WP_CLI_Command {
 				}
 
 				if( empty( parse_url( $image_src, PHP_URL_SCHEME ) ) ) {
-					$file_array['tmp_name'] = download_url( "http:$image_src" );
-				} else {
-					$file_array['tmp_name'] = download_url( $image_src );
+					$image_src = "http:$image_src";
 				}
 
+				$file_array['tmp_name'] = download_url( $image_src );
+
+				// Workaround to get images to import from subdomains of googleusercontent.com.
 				if( false !== strpos( $image_src, 'googleusercontent.com' ) ) {
 					$image_src .= '?.jpg';
 				}
@@ -743,11 +744,34 @@ class Import_Fixer extends WP_CLI_Command {
 				$file_array['name'] = basename( $image_src );
 
 				$attachment_id = media_handle_sideload( $file_array, $post_id );
+
+				/*
+				 * If an image fails to import because of
+				 * a query string, remove it and try again.
+				 */
+				$_parsed_image_src = parse_url( $image_src );
+
+				if( is_wp_error( $attachment_id ) && ! empty( $_parsed_image_src['query'] ) ) {
+
+					$image_src = sprintf('%s://%s%s', $_parsed_image_src['scheme'], $_parsed_image_src['host'], $_parsed_image_src['path']);
+
+					/*
+					 * The file could have downloaded correctly, but failed to import.
+					 * If it did, delete it.
+					 */
+					if( ! is_wp_error( $file_array['tmp_name'] ) ) {
+						unlink( $file_array['tmp_name'] );
+					}
+
+					$file_array['tmp_name'] = download_url( $image_src );
+					$file_array['name'] = basename( $image_src );
+					$attachment_id = media_handle_sideload( $file_array, $post_id );
+				}
 		 
 				$uploaded_image_src = wp_get_attachment_url( $attachment_id );
 		 
 				if( empty( $uploaded_image_src ) ) {
-					echo " -- Image download failed for '$image_src' on post #$post_id\n";
+					echo " -- Image import failed for '$image_src' on post #$post_id\n";
 					if( is_wp_error( $attachment_id ) ) {
 						var_dump( $attachment_id );
 					}
