@@ -736,6 +736,10 @@ class Import_Fixer extends WP_CLI_Command {
 					$file_array['tmp_name'] = download_url( $image_src );
 				}
 
+				if( false !== strpos( $image_src, 'googleusercontent.com' ) ) {
+					$image_src .= '?.jpg';
+				}
+
 				$file_array['name'] = basename( $image_src );
 
 				$attachment_id = media_handle_sideload( $file_array, $post_id );
