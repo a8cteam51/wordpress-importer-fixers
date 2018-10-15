@@ -77,6 +77,30 @@ It assumes that:
 * all posts and attachments have `_original_import_origin` post meta defined
 * all attachments have `_original_import_url` post meta defined with the media URL as it existed on the source site
 
+### import-external-images
+
+#### Usage
+
+`wp import-fixer import-external-images [ --all-domains | --domain=mydomain.com ]`
+
+#### Description
+
+This command helps with the scenario where:
+
+* An import WXR file contains post content that references image URLs not in the media library.
+* Posts display images as hosted on the original source site (or, if said site is down, broken images).
+
+The command searches post content for external image URLs, attempts to download them into the media library as attachments, and then updates post content to use the new local attachment URL. 
+
+You can use these parameters to control its behavior:
+
+* `--list` to list all image domains found in post content, but don't take any action.
+* `--all-domains` or `--domain=mydomain.com` to have the importer use all image domains found, or to specify a single domain for importing.
+* `--post_type=myposttype` or `--post_type=any` to have the importer only operate on a specific post type, or to have it operate on all public, non-attachment posts. Default is "post".
+* `--rewind` (experimental!): Reverse image source replacements and delete any imported images previously added with this command.
+
+Note: this command does not yet support the use of origins.
+
 ### fix-post-hierarchy-contextually
 
 #### Usage
