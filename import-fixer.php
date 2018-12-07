@@ -734,7 +734,14 @@ class Import_Fixer extends WP_CLI_Command {
 					$image_src = "http:$image_src";
 				}
 
-				$file_array['tmp_name'] = download_url( $image_src );
+				$downloaded_file = download_url( $image_src );
+				if( is_wp_error( $downloaded_file ) ) {
+					WP_CLI::debug( $downloaded_file );
+					WP_CLI::line( " -- Could not import image from URL: $image_src." );
+					continue;
+				}
+
+				$file_array['tmp_name'] = $downloaded_file;
 
 				// Workaround to get images to import from subdomains of googleusercontent.com.
 				if( false !== strpos( $image_src, 'googleusercontent.com' ) ) {
@@ -763,13 +770,20 @@ class Import_Fixer extends WP_CLI_Command {
 						unlink( $file_array['tmp_name'] );
 					}
 
-					$file_array['tmp_name'] = download_url( $image_src );
+					$downloaded_file = download_url( $image_src );
+					if( is_wp_error( $downloaded_file ) ) {
+						WP_CLI::debug( $downloaded_file );
+						WP_CLI::line( " -- Could not import image from URL: $image_src." );
+						continue;
+					}
+
+					$file_array['tmp_name'] = $downloaded_file;
 					$file_array['name'] = basename( $image_src );
 					$attachment_id = media_handle_sideload( $file_array, $post_id );
 				}
-		 
+
 				$uploaded_image_src = wp_get_attachment_url( $attachment_id );
-		 
+
 				if( empty( $uploaded_image_src ) ) {
 					echo " -- Image import failed for '$image_src' on post #$post_id\n";
 					if( is_wp_error( $attachment_id ) ) {
@@ -777,7 +791,7 @@ class Import_Fixer extends WP_CLI_Command {
 					}
 					continue;
 				}
-		 
+
 				update_post_meta( $attachment_id, '_added_via_script_backup_meta', array(
 					'old_url' => $image_src,
 					'new_url' => $uploaded_image_src,
