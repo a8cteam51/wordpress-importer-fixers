@@ -734,13 +734,14 @@ class Import_Fixer extends WP_CLI_Command {
 					$image_src = "http:$image_src";
 				}
 
-				$file_array['tmp_name'] = download_url( $image_src );
-
 				// Workaround to get images to import from subdomains of googleusercontent.com.
 				if( false !== strpos( $image_src, 'googleusercontent.com' ) ) {
 					$image_src .= '?.jpg';
 				}
 
+				$downloaded_file = $this->download_and_save_image( $image_src );
+
+				$file_array['tmp_name'] = $downloaded_file['file'];
 				$file_array['name'] = basename( $image_src );
 
 				$attachment_id = media_handle_sideload( $file_array, $post_id );
@@ -763,13 +764,15 @@ class Import_Fixer extends WP_CLI_Command {
 						unlink( $file_array['tmp_name'] );
 					}
 
-					$file_array['tmp_name'] = download_url( $image_src );
+					$downloaded_file = $this->download_and_save_image( $image_src );
+
+					$file_array['tmp_name'] = $downloaded_file;
 					$file_array['name'] = basename( $image_src );
 					$attachment_id = media_handle_sideload( $file_array, $post_id );
 				}
-		 
+
 				$uploaded_image_src = wp_get_attachment_url( $attachment_id );
-		 
+
 				if( empty( $uploaded_image_src ) ) {
 					echo " -- Image import failed for '$image_src' on post #$post_id\n";
 					if( is_wp_error( $attachment_id ) ) {
@@ -777,7 +780,7 @@ class Import_Fixer extends WP_CLI_Command {
 					}
 					continue;
 				}
-		 
+
 				update_post_meta( $attachment_id, '_added_via_script_backup_meta', array(
 					'old_url' => $image_src,
 					'new_url' => $uploaded_image_src,
@@ -800,6 +803,32 @@ class Import_Fixer extends WP_CLI_Command {
 				WP_CLI::line( $domain );
 			}
 		}
+	}
+
+	public static function download_and_save_image( $image_src ) {
+		// Download the remote image.
+		$response = wp_remote_get( $image_src, array( 'user-agent' => 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko)' .
+			' Chrome/41.0.2228.0 Safari/537.36' )  );
+		if( is_wp_error( $response ) ) {
+			WP_CLI::debug( var_dump( $response ) );
+			WP_CLI::line( " -- Could not import image from URL: $image_src." );
+			return;
+		}
+
+		// Pull the image data out of the response.
+		$body = wp_remote_retrieve_body( $response );
+		if( '' == $body ) {
+			WP_CLI::line( " -- Could not open the file: $image_src." );
+			return;
+		}
+
+		// Upload the image file.
+		$downloaded_file = wp_upload_bits( basename( $image_src ), '', $body );
+		if( $downloaded_file['error'] ) {
+			WP_CLI::line( " -- Could not upload image from URL: $image_src." );
+		}
+
+		return $downloaded_file;
 	}
 
 	public static function _import_external_images_rewind() {
