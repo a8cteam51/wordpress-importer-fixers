@@ -856,6 +856,44 @@ class Import_Fixer extends WP_CLI_Command {
 		return strlen( $b ) - strlen( $a );
 	}
 
+	/**
+	 * Turn Art19 links into embed blocks
+	 *
+	 * @subcommand fix-art-embeds
+	 */
+	public function fix_art19_embeds() {
+		$i = 0;
+		$args = array(
+			's' => 'art19',
+			'posts_per_page' => -1,
+			'post_status' => 'any',
+		);
+		$art_posts = get_posts( $args );
+		foreach( $art_posts as $post ) {
+			$art_19_link_regex = '/<a href="(http|https\:\/\/art19\.com\/.*?)".*?<\/a>/';
+
+
+
+			if( preg_match( $art_19_link_regex, $post->post_content, $matches ) ) {
+
+				$secret = substr( str_shuffle( str_repeat( "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWWXYZ", 10 ) ), 0, 10 );
+
+				$embed = '<figure class="wp-block-embed is-type-rich is-provider-art-19"><div class="wp-block-embed__wrapper"><iframe class="wp-embedded-content" sandbox="allow-scripts" security="restricted" src="' . $matches[1] . '/embed#?secret=' . $secret . '" data-secret="' . $secret . '" width="640" height="200" scrolling="no"></iframe></div></figure>';
+
+				$new_content =  preg_replace( $art_19_link_regex, $embed, $post->post_content );
+
+				$updated_post = array(
+					'ID' => $post->ID,
+					'post_content' => $new_content
+				);
+				wp_update_post( $updated_post );
+				WP_CLI::line( "Updated post " . $post->ID );
+				$i++;
+			}
+		}
+
+		WP_CLI::success( $i . ' posts updated.' );
+	}
 
 }
 
