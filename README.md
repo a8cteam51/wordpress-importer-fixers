@@ -123,9 +123,15 @@ It assumes that:
 * all posts have `_original_post_id` post meta defined
 * all posts with a parent post have `_original_parent_id` post meta defined
 
-### fix-art19-embeds
+### fix-embeds
 
-###
+#### Usage
+
+`wp import-fixer fix-embeds --embed-url=https://art19.com`
+
+#### Description
+
+This command helps when you are importing from a source such as the Medium that embeds content from other sites.  The Medium's export function turns those embeds into text links.  This command turns those text links into plain URLs, which WordPress automatically converts to embeds.
 
 ## About Origins
 

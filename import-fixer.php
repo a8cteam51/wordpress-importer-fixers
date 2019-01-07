@@ -859,18 +859,26 @@ class Import_Fixer extends WP_CLI_Command {
 	/**
 	 * Turn Art19 links into embed blocks
 	 *
-	 * @subcommand fix-art-embeds
+	 * @subcommand fix-embeds
+	 * @synopsis [--embed-url=<embed-url>]
 	 */
-	public function fix_art19_embeds() {
+	public function fix_embeds( $args, $assoc_args ) {
 		$i = 0;
 		$args = array(
-			's' => 'art19',
-			'posts_per_page' => -1,
+			's' => $assoc_args['embed-url'],
+			'posts_per_page' => 5,
 			'post_status' => 'any',
+			'offset' => 15
 		);
-		$art_posts = get_posts( $args );
-		foreach( $art_posts as $post ) {
-			$art_19_link_regex = '/<a href="(http|https\:\/\/art19\.com\/.*?)".*?<\/a>/';
+		$embed_posts = get_posts( $args );
+		if( empty( $embed_posts ) ) {
+			WP_CLI::line( 'No posts found' );
+		}
+		foreach( $embed_posts as $post ) {
+			$parsed_url = parse_url( $assoc_args['embed-url'] );
+			$regex_url = preg_quote( $parsed_url['host'] );
+			WP_CLI::debug( print_r( $regex_url, true ) );
+			$art_19_link_regex = '/<a href="(http|https\:\/\/' . $regex_url . '\/.*?)".*?<\/a>/';
 
 			if( preg_match( $art_19_link_regex, $post->post_content, $matches ) ) {
 
@@ -881,7 +889,7 @@ class Import_Fixer extends WP_CLI_Command {
 					'post_content' => $new_content
 				);
 				wp_update_post( $updated_post );
-				WP_CLI::line( "Updated post " . $post->ID );
+				WP_CLI::line( 'Updated post ' . $post->ID );
 				$i++;
 			}
 		}
