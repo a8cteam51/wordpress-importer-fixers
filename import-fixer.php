@@ -857,7 +857,7 @@ class Import_Fixer extends WP_CLI_Command {
 	}
 
 	/**
-	 * Turn Art19 links into embed blocks
+	 * Turn links into embed blocks
 	 *
 	 * @subcommand fix-embeds
 	 * @synopsis [--embed-url=<embed-url>]
@@ -878,11 +878,11 @@ class Import_Fixer extends WP_CLI_Command {
 			$parsed_url = parse_url( $assoc_args['embed-url'] );
 			$regex_url = preg_quote( $parsed_url['host'] );
 			WP_CLI::debug( print_r( $regex_url, true ) );
-			$art_19_link_regex = '/<a href="(http|https\:\/\/' . $regex_url . '\/.*?)".*?<\/a>/';
+			$embed_regex = '/<a href="(http|https\:\/\/' . $regex_url . '\/.*?)".*?<\/a>/';
 
-			if( preg_match( $art_19_link_regex, $post->post_content, $matches ) ) {
+			if( preg_match( $embed_regex, $post->post_content, $matches ) ) {
 
-				$new_content =  preg_replace( $art_19_link_regex, $matches[1], $post->post_content );
+				$new_content =  preg_replace( $embed_regex, $matches[1], $post->post_content );
 
 				$updated_post = array(
 					'ID' => $post->ID,
