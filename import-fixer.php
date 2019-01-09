@@ -866,9 +866,8 @@ class Import_Fixer extends WP_CLI_Command {
 		$i = 0;
 		$args = array(
 			's' => $assoc_args['embed-url'],
-			'posts_per_page' => 5,
+			'posts_per_page' => -1,
 			'post_status' => 'any',
-			'offset' => 15
 		);
 		$embed_posts = get_posts( $args );
 		if( empty( $embed_posts ) ) {
