@@ -739,6 +739,11 @@ class Import_Fixer extends WP_CLI_Command {
 					$image_src .= '?.jpg';
 				}
 
+				// Workaround to get full-size images from The Medium.
+				if( false !== strpos( $image_src, '/max/' ) ) {
+					$image_src = preg_replace( '/\/max\/\d+/', '', $image_src );
+				}
+
 				$downloaded_file = $this->download_and_save_image( $image_src );
 
 				$file_array['tmp_name'] = $downloaded_file['file'];
