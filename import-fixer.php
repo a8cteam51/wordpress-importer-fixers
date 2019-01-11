@@ -746,10 +746,20 @@ class Import_Fixer extends WP_CLI_Command {
 
 				$downloaded_file = $this->download_and_save_image( $image_src );
 
+//				add_filter( 'upload_mimes', function( $mimes ) {
+//					$mimes['placeholder'] = 'image/placeholder';
+//					return $mimes;
+//				});
+
 				$file_array['tmp_name'] = $downloaded_file['file'];
+				if( empty( wp_check_filetype( $image_src )['ext'] ) ) {
+					$image_src .= 'png';
+				}
 				$file_array['name'] = basename( $image_src );
+				WP_CLI::debug( $image_src );
 
 				$attachment_id = media_handle_sideload( $file_array, $post_id );
+				WP_CLI::debug( print_r( $attachment_id, true ) );
 
 				/*
 				 * If an image fails to import because of
@@ -815,7 +825,7 @@ class Import_Fixer extends WP_CLI_Command {
 		$response = wp_remote_get( $image_src, array( 'user-agent' => 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko)' .
 			' Chrome/41.0.2228.0 Safari/537.36' )  );
 		if( is_wp_error( $response ) ) {
-			WP_CLI::debug( var_dump( $response ) );
+			WP_CLI::debug( var_dump( print_r( $response, true) ) );
 			WP_CLI::line( " -- Could not import image from URL: $image_src." );
 			return;
 		}
@@ -828,6 +838,11 @@ class Import_Fixer extends WP_CLI_Command {
 		}
 
 		// Upload the image file.
+		// add a fake extension if the file has no extension.
+		if( empty( wp_check_filetype( $image_src )['ext'] ) ) {
+			$image_src .= 'png';
+		}
+		WP_CLI::debug( $image_src );
 		$downloaded_file = wp_upload_bits( basename( $image_src ), '', $body );
 		if( $downloaded_file['error'] ) {
 			WP_CLI::line( " -- Could not upload image from URL: $image_src." );
