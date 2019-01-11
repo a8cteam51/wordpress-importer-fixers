@@ -740,26 +740,22 @@ class Import_Fixer extends WP_CLI_Command {
 				}
 
 				// Workaround to get full-size images from The Medium.
+				$post_content_image_src = $image_src;
 				if( false !== strpos( $image_src, '/max/' ) ) {
 					$image_src = preg_replace( '/\/max\/\d+/', '', $image_src );
 				}
 
 				$downloaded_file = $this->download_and_save_image( $image_src );
 
-//				add_filter( 'upload_mimes', function( $mimes ) {
-//					$mimes['placeholder'] = 'image/placeholder';
-//					return $mimes;
-//				});
-
+				// If the file doesn't have an extension, add a fake one to force WP to sideload it.
 				$file_array['tmp_name'] = $downloaded_file['file'];
 				if( empty( wp_check_filetype( $image_src )['ext'] ) ) {
 					$image_src .= 'png';
 				}
 				$file_array['name'] = basename( $image_src );
-				WP_CLI::debug( $image_src );
 
 				$attachment_id = media_handle_sideload( $file_array, $post_id );
-				WP_CLI::debug( print_r( $attachment_id, true ) );
+				WP_CLI::debug( 'attachment id - ' . print_r( $attachment_id, true ) );
 
 				/*
 				 * If an image fails to import because of
@@ -801,16 +797,19 @@ class Import_Fixer extends WP_CLI_Command {
 					'new_url' => $uploaded_image_src,
 				));
 
-				$post_content = str_replace( $image_src, $uploaded_image_src, $post_content );
+				$post_content = str_replace( $post_content_image_src, $uploaded_image_src, $post_content );
 				$updated = $wpdb->update( $wpdb->posts, array( 'post_content' => $post_content ), array( 'ID' => $post_id ) );
 				if( ! empty( $updated ) ) {
 					WP_CLI::line( " -- Imported images for post #$post_id." );
 					WP_CLI::line( "   -- Replaced image source:" );
 					WP_CLI::line( "     -- Old image URL: $image_src" );
 					WP_CLI::line( "     -- New image URL: $uploaded_image_src" );
+				} else {
+					WP_CLI::line( " -- Post #$post_id not updated" );
 				}
+				usleep( 5000 );
 			}
-			usleep( 5000 );
+
 		}
 
 		if( ! empty( $list_only ) ) {
@@ -837,12 +836,12 @@ class Import_Fixer extends WP_CLI_Command {
 			return;
 		}
 
-		// Upload the image file.
-		// add a fake extension if the file has no extension.
+
+		// Add a fake extension if the file has no extension.
 		if( empty( wp_check_filetype( $image_src )['ext'] ) ) {
 			$image_src .= 'png';
 		}
-		WP_CLI::debug( $image_src );
+		// Upload the image file.
 		$downloaded_file = wp_upload_bits( basename( $image_src ), '', $body );
 		if( $downloaded_file['error'] ) {
 			WP_CLI::line( " -- Could not upload image from URL: $image_src." );
@@ -874,46 +873,6 @@ class Import_Fixer extends WP_CLI_Command {
 	// sort by strlen, longest string first
 	public static function _cmpr_strlen( $a, $b ) {
 		return strlen( $b ) - strlen( $a );
-	}
-
-	/**
-	 * Turn links into embed blocks
-	 *
-	 * @subcommand fix-embeds
-	 * @synopsis [--embed-url=<embed-url>]
-	 */
-	public function fix_embeds( $args, $assoc_args ) {
-		$i = 0;
-		$args = array(
-			's' => $assoc_args['embed-url'],
-			'posts_per_page' => -1,
-			'post_status' => 'any',
-		);
-		$embed_posts = get_posts( $args );
-		if( empty( $embed_posts ) ) {
-			WP_CLI::line( 'No posts found' );
-		}
-		foreach( $embed_posts as $post ) {
-			$parsed_url = parse_url( $assoc_args['embed-url'] );
-			$regex_url = preg_quote( $parsed_url['host'] );
-			WP_CLI::debug( print_r( $regex_url, true ) );
-			$embed_regex = '/<a href="(http|https\:\/\/' . $regex_url . '\/.*?)".*?<\/a>/';
-
-			if( preg_match( $embed_regex, $post->post_content, $matches ) ) {
-
-				$new_content =  preg_replace( $embed_regex, $matches[1], $post->post_content );
-
-				$updated_post = array(
-					'ID' => $post->ID,
-					'post_content' => $new_content
-				);
-				wp_update_post( $updated_post );
-				WP_CLI::line( 'Updated post ' . $post->ID );
-				$i++;
-			}
-		}
-
-		WP_CLI::success( $i . ' posts updated.' );
 	}
 
 }
