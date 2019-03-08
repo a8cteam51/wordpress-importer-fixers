@@ -805,6 +805,92 @@ class Import_Fixer extends WP_CLI_Command {
 		}
 	}
 
+	/**
+	 * Fix post comment count.
+	 *
+	 * @subcommand fix-comment-count
+	 */
+	public function fix_comment_count() {
+
+		// Starting time of the script.
+		$start_time = time();
+
+		$all_sites = get_sites();
+
+		foreach ( $all_sites as $single_site ) {
+
+			switch_to_blog( $single_site->blog_id );
+
+			WP_CLI::line();
+			WP_CLI::line( sprintf( 'Processing for Blog ID %d', absint( $single_site->blog_id ) ) );
+
+			global $wpdb;
+
+			$batch_size      = 500;
+			$offset          = 0;
+			$total_found     = 0;
+			$success_count   = 0;
+			$fail_count      = 0;
+
+			$post_table = $wpdb->posts;
+
+			$query = "SELECT ID FROM {$post_table} WHERE post_status='publish' ORDER BY ID ASC LIMIT %d, %d";
+
+			do {
+
+				WP_CLI::line();
+				WP_CLI::line( sprintf( 'Starting from offset %d', absint( $offset ) ) );
+
+				$all_posts = $wpdb->get_results( $wpdb->prepare( $query, $offset, $batch_size ), ARRAY_A );
+
+				if ( empty( $all_posts ) ) {
+
+					WP_CLI::line();
+					WP_CLI::line( 'No posts found.' );
+					WP_CLI::line();
+
+					return;
+				}
+
+				foreach ( $all_posts as $single_post ) {
+
+					WP_CLI::line();
+					WP_CLI::line( sprintf( 'Updating comment count for Post #%d', $single_post['ID'] ) );
+
+					if( wp_update_comment_count( $single_post['ID'] ) ) {
+						$success_count++;
+					} else {
+						$fail_count++;
+					}
+
+					WP_CLI::success( sprintf( 'Comment count updated for Post #%d', $single_post['ID'] ) );
+				}
+
+				// Update offset.
+				$offset += $batch_size;
+
+				sleep( 1 );
+
+				$count        = count( $all_posts );
+				$total_found += $count;
+
+			} while ( $count === $batch_size );
+
+			WP_CLI::line();
+			WP_CLI::success( sprintf( 'Comment count updated successfully for total %d posts.', $success_count ) );
+			WP_CLI::warning( sprintf( 'Comment count failed to update for total %d posts.', $fail_count ) );
+
+			WP_CLI::line();
+			WP_CLI::success( sprintf( 'Processed for Blog ID %d', absint( $single_site->blog_id ) ) );
+
+			restore_current_blog();
+		}
+
+		WP_CLI::line();
+		WP_CLI::success( sprintf( 'Total time taken by this migration script: %s', human_time_diff( $start_time, time() ) ) );
+		WP_CLI::line();
+	}
+
 	public static function download_and_save_image( $image_src ) {
 		// Download the remote image.
 		$response = wp_remote_get( $image_src, array( 'user-agent' => 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko)' .
