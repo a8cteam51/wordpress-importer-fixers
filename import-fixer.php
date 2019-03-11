@@ -709,7 +709,7 @@ class Import_Fixer extends WP_CLI_Command {
 				}
 
 				// Make sure the image wasn't already imported.
-				$post_exists = $wpdb->get_var( $wpdb->prepare( "SELECT post_id FROM $wpdb->postmeta WHERE meta_key = '_added_via_script_backup_meta' AND meta_value LIKE '%$image_src%'", $image_src ) );
+				$post_exists = $wpdb->get_var( $wpdb->prepare( "SELECT post_id FROM $wpdb->postmeta WHERE meta_key = '_added_via_script_backup_meta' AND meta_value LIKE %s", "%{$image_src}%" ) );
 
 				if( ! empty( $post_exists ) ) {
 					$new_src = get_post_meta( $post_exists, '_added_via_script_backup_meta', true );
