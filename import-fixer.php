@@ -811,7 +811,7 @@ class Import_Fixer extends WP_CLI_Command {
 	 * ## EXAMPLES
 	 *
 	 *     # Fix comment count for example.com.
-	 *     $ wp import-fixer fix-comment-count --domain=example.com
+	 *     $ wp import-fixer fix-comment-count --url=example.com
 	 *
 	 * @subcommand fix-comment-count
 	 */
