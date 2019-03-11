@@ -808,83 +808,79 @@ class Import_Fixer extends WP_CLI_Command {
 	/**
 	 * Fix post comment count.
 	 *
+	 * ## EXAMPLES
+	 *
+	 *     # Fix comment count for example.com.
+	 *     $ wp import-fixer fix-comment-count --domain=example.com
+	 *
 	 * @subcommand fix-comment-count
 	 */
-	public function fix_comment_count() {
+	public function fix_comment_count( $args, $assoc_args ) {
 
 		// Starting time of the script.
 		$start_time = time();
 
-		$all_sites = get_sites();
+		$url = WP_CLI::get_config( 'url' );
 
-		foreach ( $all_sites as $single_site ) {
+		if ( empty( $url ) ) {
+			WP_CLI::error( 'You have to specify the site URL with --url param for which you have to fix comment count.' );
+		}
 
-			switch_to_blog( $single_site->blog_id );
+		global $wpdb;
+
+		$batch_size      = 500;
+		$offset          = 0;
+		$total_found     = 0;
+		$success_count   = 0;
+		$fail_count      = 0;
+
+		$post_table = $wpdb->posts;
+
+		$query = "SELECT ID FROM {$post_table} WHERE post_status='publish' ORDER BY ID ASC LIMIT %d, %d";
+
+		do {
 
 			WP_CLI::line();
-			WP_CLI::line( sprintf( 'Processing for Blog ID %d', absint( $single_site->blog_id ) ) );
+			WP_CLI::line( sprintf( 'Starting from offset %d:', absint( $offset ) ) );
 
-			global $wpdb;
+			$all_posts = $wpdb->get_results( $wpdb->prepare( $query, $offset, $batch_size ), ARRAY_A );
 
-			$batch_size      = 500;
-			$offset          = 0;
-			$total_found     = 0;
-			$success_count   = 0;
-			$fail_count      = 0;
-
-			$post_table = $wpdb->posts;
-
-			$query = "SELECT ID FROM {$post_table} WHERE post_status='publish' ORDER BY ID ASC LIMIT %d, %d";
-
-			do {
+			if ( empty( $all_posts ) ) {
 
 				WP_CLI::line();
-				WP_CLI::line( sprintf( 'Starting from offset %d', absint( $offset ) ) );
+				WP_CLI::line( 'No posts found.' );
+				WP_CLI::line();
 
-				$all_posts = $wpdb->get_results( $wpdb->prepare( $query, $offset, $batch_size ), ARRAY_A );
+				return;
+			}
 
-				if ( empty( $all_posts ) ) {
+			foreach ( $all_posts as $single_post ) {
 
-					WP_CLI::line();
-					WP_CLI::line( 'No posts found.' );
-					WP_CLI::line();
+				WP_CLI::line();
+				WP_CLI::line( sprintf( 'Updating comment count for Post #%d:', $single_post['ID'] ) );
 
-					return;
+				if( wp_update_comment_count( $single_post['ID'] ) ) {
+					$success_count++;
+				} else {
+					$fail_count++;
 				}
 
-				foreach ( $all_posts as $single_post ) {
+				WP_CLI::success( sprintf( 'Comment count updated for Post #%d.', $single_post['ID'] ) );
+			}
 
-					WP_CLI::line();
-					WP_CLI::line( sprintf( 'Updating comment count for Post #%d', $single_post['ID'] ) );
+			// Update offset.
+			$offset += $batch_size;
 
-					if( wp_update_comment_count( $single_post['ID'] ) ) {
-						$success_count++;
-					} else {
-						$fail_count++;
-					}
+			sleep( 1 );
 
-					WP_CLI::success( sprintf( 'Comment count updated for Post #%d', $single_post['ID'] ) );
-				}
+			$count        = count( $all_posts );
+			$total_found += $count;
 
-				// Update offset.
-				$offset += $batch_size;
+		} while ( $count === $batch_size );
 
-				sleep( 1 );
-
-				$count        = count( $all_posts );
-				$total_found += $count;
-
-			} while ( $count === $batch_size );
-
-			WP_CLI::line();
-			WP_CLI::success( sprintf( 'Comment count updated successfully for total %d posts.', $success_count ) );
-			WP_CLI::warning( sprintf( 'Comment count failed to update for total %d posts.', $fail_count ) );
-
-			WP_CLI::line();
-			WP_CLI::success( sprintf( 'Processed for Blog ID %d', absint( $single_site->blog_id ) ) );
-
-			restore_current_blog();
-		}
+		WP_CLI::line();
+		WP_CLI::success( sprintf( 'Comment count updated successfully for total %d posts.', $success_count ) );
+		WP_CLI::warning( sprintf( 'Comment count failed to update for total %d posts.', $fail_count ) );
 
 		WP_CLI::line();
 		WP_CLI::success( sprintf( 'Total time taken by this migration script: %s', human_time_diff( $start_time, time() ) ) );
