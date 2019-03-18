@@ -810,8 +810,11 @@ class Import_Fixer extends WP_CLI_Command {
 	 *
 	 * ## EXAMPLES
 	 *
-	 *     # Fix comment count for example.com.
+	 *     # Fix comment count when multisite for example.com.
 	 *     $ wp import-fixer fix-comment-count --url=example.com
+	 *
+	 *     # Fix comment count when single site for example.com.
+	 *     $ wp import-fixer fix-comment-count
 	 *
 	 * @subcommand fix-comment-count
 	 */
@@ -820,30 +823,22 @@ class Import_Fixer extends WP_CLI_Command {
 		// Starting time of the script.
 		$start_time = time();
 
-		$url = WP_CLI::get_config( 'url' );
-
-		if ( empty( $url ) ) {
-			WP_CLI::error( 'You have to specify the site URL with --url param for which you have to fix comment count.' );
-		}
-
 		global $wpdb;
 
-		$batch_size      = 500;
-		$offset          = 0;
-		$total_found     = 0;
-		$success_count   = 0;
-		$fail_count      = 0;
+		$batch_size    = 500;
+		$offset        = 0;
+		$total_found   = 0;
+		$success_count = 0;
+		$fail_count    = 0;
 
-		$post_table = $wpdb->posts;
-
-		$query = "SELECT ID FROM {$post_table} WHERE post_status='publish' ORDER BY ID ASC LIMIT %d, %d";
+		$query = "SELECT ID FROM {$wpdb->posts} WHERE post_status='publish' ORDER BY ID ASC LIMIT %d, %d";
 
 		do {
 
 			WP_CLI::line();
 			WP_CLI::line( sprintf( 'Starting from offset %d:', absint( $offset ) ) );
 
-			$all_posts = $wpdb->get_results( $wpdb->prepare( $query, $offset, $batch_size ), ARRAY_A );
+			$all_posts = $wpdb->get_col( $wpdb->prepare( $query, $offset, $batch_size ) );
 
 			if ( empty( $all_posts ) ) {
 
@@ -854,18 +849,18 @@ class Import_Fixer extends WP_CLI_Command {
 				return;
 			}
 
-			foreach ( $all_posts as $single_post ) {
+			foreach ( $all_posts as $single_post_id ) {
 
 				WP_CLI::line();
-				WP_CLI::line( sprintf( 'Updating comment count for Post #%d:', $single_post['ID'] ) );
+				WP_CLI::line( sprintf( 'Updating comment count for Post #%d:', $single_post_id ) );
 
-				if( wp_update_comment_count( $single_post['ID'] ) ) {
+				if( wp_update_comment_count( $single_post_id ) ) {
 					$success_count++;
 				} else {
 					$fail_count++;
 				}
 
-				WP_CLI::success( sprintf( 'Comment count updated for Post #%d.', $single_post['ID'] ) );
+				WP_CLI::success( sprintf( 'Comment count updated for Post #%d.', $single_post_id ) );
 			}
 
 			// Update offset.
