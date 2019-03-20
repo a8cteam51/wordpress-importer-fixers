@@ -123,7 +123,16 @@ It assumes that:
 * all posts have `_original_post_id` post meta defined
 * all posts with a parent post have `_original_parent_id` post meta defined
 
-###
+### fix-comment-count
+    
+#### Usage
+
+* *Single Site*: `wp import-fixer fix-comment-count`
+* *Multi-Site*: `wp import-fixer fix-comment-count --url=example.test`
+
+#### Description
+
+This command fixes comment counts for the published posts.
 
 ## About Origins
 
