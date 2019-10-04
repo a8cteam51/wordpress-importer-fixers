@@ -700,7 +700,7 @@ class Import_Fixer extends WP_CLI_Command {
 
 				$current_image_domain = parse_url( $image_src, PHP_URL_HOST );
 
-				$old_image_src = '';
+				$replacement_url = $image_src;
 
 				if ( empty( $current_image_domain ) ) {
 
@@ -709,15 +709,11 @@ class Import_Fixer extends WP_CLI_Command {
 						continue;
 					} else {
 
-						$old_image_src = $image_src;
-
 						$image_src = $protocol . '://' . $domain_to_import . '/' . $image_src;
 
 						$current_image_domain = $domain_to_import;
 					}
 				}
-
-				$replacement_url = ( ! empty( $old_image_src ) ) ? $old_image_src : $image_src;
 
 				if( in_array( $current_image_domain, array( parse_url( home_url(), PHP_URL_HOST ), parse_url( site_url(), PHP_URL_HOST ) ) ) ) {
 					// Skip importing if the image source domain matches the site's domain.
