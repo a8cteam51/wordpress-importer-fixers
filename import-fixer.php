@@ -581,7 +581,7 @@ class Import_Fixer extends WP_CLI_Command {
 	 * : You can specify a single domain to import external images from.
 	 *
 	 * [--protocol=<protocol-of-import-domain>]
-	 * : Protocol for the source site, from where images needs to import. Default: https
+	 * : Protocol for the source site, from where images needs to import. Default is `https`
 	 *
 	 * [--all-domains]
 	 * : Import images from any domain.
@@ -598,10 +598,20 @@ class Import_Fixer extends WP_CLI_Command {
 	 *     $ wp import-fixer import-external-images --list-domains
 	 *
 	 *     # Import images from example.com.
-	 *     $ wp import-fixer import-external-images --domain=example.com --protocol=https
+	 *     $ wp import-fixer import-external-images --domain=example.com
 	 *
 	 *     # Import images from www.example.com.
-	 *     $ wp import-fixer import-external-images --domain=www.example.com --protocol=https
+	 *     $ wp import-fixer import-external-images --domain=www.example.com
+	 *
+	 *     # Import related path images from example.com
+	 *     # NOTE: This will not work with `--all-domains` argument, as it's required old site's domain to make absolute path.
+	 *     # `--protocol` is optional argument here as default is `https` but if old site is on `http` then needs to pass that.
+	 *     $ wp import-fixer import-external-images --domain=example.com --protocol=http
+	 *
+	 *     # Import related path images from www.example.com
+	 *     # NOTE: This will not work with `--all-domains` argument, as it's required old site's domain to make absolute path.
+	 *     # `--protocol` is optional argument here as default is `https` but if old site is on `http` then needs to pass that.
+	 *     $ wp import-fixer import-external-images --domain=www.example.com --protocol=http
 	 *
 	 *     # Import images from any domain.
 	 *     $ wp import-fixer import-external-images --all-domains
