@@ -464,7 +464,7 @@ class Import_Fixer extends WP_CLI_Command {
 
         return $origins;
     }
-    
+
     /**
      * Clear all of the caches for memory management
      */
@@ -580,6 +580,9 @@ class Import_Fixer extends WP_CLI_Command {
 	 * [--domain=<domain-to-import-from>]
 	 * : You can specify a single domain to import external images from.
 	 *
+	 * [--protocol=<protocol-of-import-domain>]
+	 * : Protocol for the source site, from where images needs to import. Default is `https`
+	 *
 	 * [--all-domains]
 	 * : Import images from any domain.
 	 *
@@ -600,9 +603,19 @@ class Import_Fixer extends WP_CLI_Command {
 	 *     # Import images from www.example.com.
 	 *     $ wp import-fixer import-external-images --domain=www.example.com
 	 *
+	 *     # Import related path images from example.com
+	 *     # NOTE: This will not work with `--all-domains` argument, as it's required old site's domain to make absolute path.
+	 *     # `--protocol` is optional argument here as default is `https` but if old site is on `http` then needs to pass that.
+	 *     $ wp import-fixer import-external-images --domain=example.com --protocol=http
+	 *
+	 *     # Import related path images from www.example.com
+	 *     # NOTE: This will not work with `--all-domains` argument, as it's required old site's domain to make absolute path.
+	 *     # `--protocol` is optional argument here as default is `https` but if old site is on `http` then needs to pass that.
+	 *     $ wp import-fixer import-external-images --domain=www.example.com --protocol=http
+	 *
 	 *     # Import images from any domain.
 	 *     $ wp import-fixer import-external-images --all-domains
-	 *   
+	 *
 	 * @subcommand import-external-images
 	 */
 	public function import_external_images( $args, $assoc_args ) {
@@ -619,6 +632,8 @@ class Import_Fixer extends WP_CLI_Command {
 		$domain_to_import = \WP_CLI\Utils\get_flag_value( $assoc_args, 'domain' );
 		$all_domains = \WP_CLI\Utils\get_flag_value( $assoc_args, 'all-domains' );
 		$post_type = \WP_CLI\Utils\get_flag_value( $assoc_args, 'post_type' );
+
+		$protocol = \WP_CLI\Utils\get_flag_value( $assoc_args, 'protocol', 'https' );
 
 		if( ! empty( $domain_to_import ) && ! empty( $all_domains ) ) {
 			WP_CLI::error( "You can't use --domain and --all-domains." );
@@ -639,7 +654,7 @@ class Import_Fixer extends WP_CLI_Command {
 		if( empty( $post_type ) ) {
 			$post_type = 'post';
 		}
-		
+
 		if( $post_type === 'any' ) {
 			$post_types = get_post_types( array( 'public' => true ) );
 
@@ -647,9 +662,9 @@ class Import_Fixer extends WP_CLI_Command {
 			unset( $post_types['attachment'] );
 
 			foreach( $post_types as $key => $post_type ) {
-				$post_types[ $key ] = "'$post_type'"; 
+				$post_types[ $key ] = "'$post_type'";
 			}
-			
+
 			$post_types = implode( ',', $post_types );
 			// TODO: Build/run the query
 		} else {
@@ -661,34 +676,53 @@ class Import_Fixer extends WP_CLI_Command {
 		}
 
 		$total_posts = count( $post_ids );
-		
+
 		$progress = \WP_CLI\Utils\make_progress_bar( 'Processing posts', $total_posts );
 		$all_image_domains = array();
 
 		foreach( $post_ids as $post_id ) {
+
 			//$progress->tick();
 			$post_content = get_post( $post_id )->post_content;
-		 
+
 			if( empty( $post_content ) ) {
 				continue;
 			}
 
 			preg_match_all( '#<img(.*?)>#si', $post_content, $images );
+
 			if( empty( $images[0] ) ) {
+				WP_CLI::line( "No images here: #$post_id" );
 				continue;
 			}
-		 
+
 			foreach( $images[0] as $image ) {
 				$matches = array();
 				$image_html = $image;
 				preg_match( '#src="(.*?)"#i', $image_html, $image_src );
+
+				if ( empty( $image_src[1] ) ) {
+					WP_CLI::line( "Image not found in #$post_id" );
+					continue;
+				}
+
 				$image_src = $image_src[1];
 
 				$current_image_domain = parse_url( $image_src, PHP_URL_HOST );
 
-				if( empty( $current_image_domain ) ) {
-					WP_CLI::warning( "Encountered badly formatted image src in post #$post_id: $image_src" );
-					continue;
+				$replacement_url = $image_src;
+
+				if ( empty( $current_image_domain ) ) {
+
+					if ( empty( $domain_to_import ) ) {
+						WP_CLI::warning( "Encountered badly formatted image src in post #$post_id: $image_src" );
+						continue;
+					} else {
+
+						$image_src = $protocol . '://' . $domain_to_import . '/' . $image_src;
+
+						$current_image_domain = $domain_to_import;
+					}
 				}
 
 				if( in_array( $current_image_domain, array( parse_url( home_url(), PHP_URL_HOST ), parse_url( site_url(), PHP_URL_HOST ) ) ) ) {
@@ -717,7 +751,7 @@ class Import_Fixer extends WP_CLI_Command {
 					if( empty( $new_src ) ) {
 						continue;
 					}
-					$post_content = str_replace( $image_src, $new_src, $post_content );
+					$post_content = str_replace( $replacement_url, $new_src, $post_content );
 					$updated = $wpdb->update( $wpdb->posts, array( 'post_content' => $post_content ), array( 'ID' => $post_id ) );
 
 					if( ! empty( $updated ) ) {
@@ -771,29 +805,36 @@ class Import_Fixer extends WP_CLI_Command {
 					$attachment_id = media_handle_sideload( $file_array, $post_id );
 				}
 
-				$uploaded_image_src = wp_get_attachment_url( $attachment_id );
+				if ( ! is_wp_error( $attachment_id ) ) {
 
-				if( empty( $uploaded_image_src ) ) {
-					echo " -- Image import failed for '$image_src' on post #$post_id\n";
-					if( is_wp_error( $attachment_id ) ) {
-						var_dump( $attachment_id );
+					$uploaded_image_src = wp_get_attachment_url( $attachment_id );
+
+					if( empty( $uploaded_image_src ) ) {
+						echo " -- Image import failed for '$image_src' on post #$post_id\n";
+						if( is_wp_error( $attachment_id ) ) {
+							var_dump( $attachment_id );
+						}
+						continue;
 					}
-					continue;
+
+					update_post_meta( $attachment_id, '_added_via_script_backup_meta', array(
+						'old_url' => $image_src,
+						'new_url' => $uploaded_image_src,
+					));
+
+					$post_content = str_replace( $replacement_url, $uploaded_image_src, $post_content );
+					$updated = $wpdb->update( $wpdb->posts, array( 'post_content' => $post_content ), array( 'ID' => $post_id ) );
+					if( ! empty( $updated ) ) {
+						WP_CLI::line( " -- Imported images for post #$post_id." );
+						WP_CLI::line( "   -- Replaced image source:" );
+						WP_CLI::line( "     -- Old image URL: $image_src" );
+						WP_CLI::line( "     -- New image URL: $uploaded_image_src" );
+					}
+
+				} else {
+					WP_CLI::warning( " -- Could not upload image from URL: $image_src." );
 				}
 
-				update_post_meta( $attachment_id, '_added_via_script_backup_meta', array(
-					'old_url' => $image_src,
-					'new_url' => $uploaded_image_src,
-				));
-
-				$post_content = str_replace( $image_src, $uploaded_image_src, $post_content );
-				$updated = $wpdb->update( $wpdb->posts, array( 'post_content' => $post_content ), array( 'ID' => $post_id ) );
-				if( ! empty( $updated ) ) {
-					WP_CLI::line( " -- Imported images for post #$post_id." );
-					WP_CLI::line( "   -- Replaced image source:" );
-					WP_CLI::line( "     -- Old image URL: $image_src" );
-					WP_CLI::line( "     -- New image URL: $uploaded_image_src" );
-				}
 			}
 			usleep( 5000 );
 		}
@@ -883,9 +924,18 @@ class Import_Fixer extends WP_CLI_Command {
 	}
 
 	public static function download_and_save_image( $image_src ) {
+
+		$image_time_out = apply_filters( 'wp_import_fixer_image_timeout', 5 );
+
 		// Download the remote image.
-		$response = wp_remote_get( $image_src, array( 'user-agent' => 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko)' .
-			' Chrome/41.0.2228.0 Safari/537.36' )  );
+		$response = wp_remote_get(
+			$image_src,
+			[
+				'user-agent' => 'Mozilla/5.0 (Windows NT 6.1) AppleWebKit/537.36 (KHTML, like Gecko)' . ' Chrome/41.0.2228.0 Safari/537.36',
+				'timeout'    => $image_time_out,
+			]
+		);
+
 		if( is_wp_error( $response ) ) {
 			WP_CLI::debug( var_dump( $response ) );
 			WP_CLI::line( " -- Could not import image from URL: $image_src." );
