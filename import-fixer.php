@@ -668,7 +668,7 @@ class Import_Fixer extends WP_CLI_Command {
 			$post_types = implode( ',', $post_types );
 			// TODO: Build/run the query
 		} else {
-			$post_ids = $wpdb->get_col( $wpdb->prepare( "SELECT ID FROM $wpdb->posts WHERE post_type = '%s' AND ID = 10024", $post_type ) );
+			$post_ids = $wpdb->get_col( $wpdb->prepare( "SELECT ID FROM $wpdb->posts WHERE post_type = '%s'", $post_type ) );
 		}
 
 		if( empty( $post_ids ) ) {
