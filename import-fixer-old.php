@@ -9,19 +9,19 @@ Version: 1.1
 */
 
 if ( ! defined( 'WP_CLI' ) || ! WP_CLI ) {
-    return;
+	return;
 }
 
 /**
  * Implements import fixers.
  */
 class Import_Fixer extends WP_CLI_Command {
-    /*
-     * Fix thumbnail references to use new their new IDs, if the IDs changed.
-     * This function works within the context of the origin the posts were imported from.
-     *
-     * @subcommand fix-thumbnails-contextually
-     */
+	/*
+	 * Fix thumbnail references to use new their new IDs, if the IDs changed.
+	 * This function works within the context of the origin the posts were imported from.
+	 *
+	 * @subcommand fix-thumbnails-contextually
+	 */
 	/**
 	 * Fix thumbnail references to use new their new IDs, if the IDs changed.
 	 * This function works within the context of the origin the posts were imported from.
@@ -124,79 +124,79 @@ class Import_Fixer extends WP_CLI_Command {
 		}
 		WP_CLI::success( "Finished!" );
 	}
-        /*
-     * Fix post parent references to use new their new IDs, if the IDs changed.
-     * This function works within the context of the origin the posts were imported from.
-     *
-     * @subcommand fix-post-hierarchy-contextually
-     */
-    public function fix_post_hierarchy_contextually() {
+	/*
+ * Fix post parent references to use new their new IDs, if the IDs changed.
+ * This function works within the context of the origin the posts were imported from.
+ *
+ * @subcommand fix-post-hierarchy-contextually
+ */
+	public function fix_post_hierarchy_contextually() {
 
-        WP_CLI::line( "Fixing up lost post parents." );
-        WP_CLI::line();
+		WP_CLI::line( "Fixing up lost post parents." );
+		WP_CLI::line();
 
-        $all_post_ids = array();
-        $post_ids_for_origins = array();
+		$all_post_ids = array();
+		$post_ids_for_origins = array();
 
-        foreach( Import_Fixer::_get_origins() as $origin ) {
-            WP_CLI::line( "Getting posts for origin: $origin" );
-            $_posts = get_posts( array( 'posts_per_page' => -1, 'fields' => 'ids', 'post_type' => 'any', 'post_status' => 'any', 'meta_query' => array( array( 'key' => '_original_import_origin', 'value' => $origin ) ) ) );
+		foreach( Import_Fixer::_get_origins() as $origin ) {
+			WP_CLI::line( "Getting posts for origin: $origin" );
+			$_posts = get_posts( array( 'posts_per_page' => -1, 'fields' => 'ids', 'post_type' => 'any', 'post_status' => 'any', 'meta_query' => array( array( 'key' => '_original_import_origin', 'value' => $origin ) ) ) );
 
-            $all_post_ids = array_merge( $_posts, $all_post_ids );
+			$all_post_ids = array_merge( $_posts, $all_post_ids );
 
-            WP_CLI::line( " -- Found " . count( $all_post_ids ) . " posts." );
+			WP_CLI::line( " -- Found " . count( $all_post_ids ) . " posts." );
 
-            $count = 0;
+			$count = 0;
 
-            WP_CLI::line( "Building post data" );
-            foreach( $_posts as $post_id ) {
-                $original_post_id = get_post_meta( $post_id, '_original_post_id', true );
-                $post_ids_for_origins[ $origin ][ $original_post_id ] = $post_id;
-                $count++;
+			WP_CLI::line( "Building post data" );
+			foreach( $_posts as $post_id ) {
+				$original_post_id = get_post_meta( $post_id, '_original_post_id', true );
+				$post_ids_for_origins[ $origin ][ $original_post_id ] = $post_id;
+				$count++;
 
-                $complete = round( 100 * ( $count / count( $_posts ) ) );
-                echo " -- Completed $complete%\r";
+				$complete = round( 100 * ( $count / count( $_posts ) ) );
+				echo " -- Completed $complete%\r";
 
-                if( $count % 100 === 0 )
-                    stop_the_insanity();
-            }
-            WP_CLI::line();
-        }
+				if( $count % 100 === 0 )
+					stop_the_insanity();
+			}
+			WP_CLI::line();
+		}
 
-        $count = 0;
-        foreach( $all_post_ids as $post_id ) {
-            $original_import_origin = get_post_meta( $post_id, '_original_import_origin', true );
+		$count = 0;
+		foreach( $all_post_ids as $post_id ) {
+			$original_import_origin = get_post_meta( $post_id, '_original_import_origin', true );
 
-            $original_parent_id = get_post_meta( $post_id, '_original_parent_id', true );
+			$original_parent_id = get_post_meta( $post_id, '_original_parent_id', true );
 
-            // If no origin is set, move on.
-            if( empty( $original_import_origin ) ) {
-                WP_CLI::debug( "Skipping post #$post_id since there is no origin set." );
-                continue;
-            }
+			// If no origin is set, move on.
+			if( empty( $original_import_origin ) ) {
+				WP_CLI::debug( "Skipping post #$post_id since there is no origin set." );
+				continue;
+			}
 
-            // get potentially lost thumbnail
-            $lost_parent_id = $post_ids_for_origins[ $original_import_origin ][ $original_parent_id ];
-            $current_parent_id = wp_get_post_parent_id( $post_id );
+			// get potentially lost thumbnail
+			$lost_parent_id = $post_ids_for_origins[ $original_import_origin ][ $original_parent_id ];
+			$current_parent_id = wp_get_post_parent_id( $post_id );
 
-            if( $current_parent_id === $lost_parent_id ) {
-                WP_CLI::debug( "Skipping updating post #$post_id to parent id #$current_parent_id since the post parent is already correct (#$current_parent_id)." );
-                continue;
-            }
+			if( $current_parent_id === $lost_parent_id ) {
+				WP_CLI::debug( "Skipping updating post #$post_id to parent id #$current_parent_id since the post parent is already correct (#$current_parent_id)." );
+				continue;
+			}
 
-            if( ! empty( $lost_parent_id ) ) {
-                WP_CLI::success( "Updating post #$post_id with post parent #" . $lost_parent_id . " (currently post parent is #" . wp_get_post_parent_id( $post_id ) . " for origin '$original_import_origin'" );
-                wp_update_post( array( 'ID' => $post_id, 'post_parent' => $lost_parent_id ) );
-            }
+			if( ! empty( $lost_parent_id ) ) {
+				WP_CLI::success( "Updating post #$post_id with post parent #" . $lost_parent_id . " (currently post parent is #" . wp_get_post_parent_id( $post_id ) . " for origin '$original_import_origin'" );
+				wp_update_post( array( 'ID' => $post_id, 'post_parent' => $lost_parent_id ) );
+			}
 
-            $count++;
-            if( $count % 100 == 0 ) {
-                WP_CLI::line( "Processed $count/" . count( $all_post_ids ) . " posts" );
-                Import_Fixer::stop_the_insanity();
-            }
-        }
-        WP_CLI::success( "Finished!" );
-    }
+			$count++;
+			if( $count % 100 == 0 ) {
+				WP_CLI::line( "Processed $count/" . count( $all_post_ids ) . " posts" );
+				Import_Fixer::stop_the_insanity();
+			}
+		}
+		WP_CLI::success( "Finished!" );
+	}
 
 	/**
 	 * Fix up gallery shortcode image IDs
@@ -457,37 +457,37 @@ class Import_Fixer extends WP_CLI_Command {
 	/**
 	 * Get distinct origins present in the current site.
 	 */
-    public static function _get_origins() {
-        global $wpdb;
+	public static function _get_origins() {
+		global $wpdb;
 
-        $origins = $wpdb->get_col( "SELECT DISTINCT( meta_value ) FROM $wpdb->postmeta WHERE meta_key = '_original_import_origin'" );
+		$origins = $wpdb->get_col( "SELECT DISTINCT( meta_value ) FROM $wpdb->postmeta WHERE meta_key = '_original_import_origin'" );
 
-        return $origins;
-    }
+		return $origins;
+	}
 
-    /**
-     * Clear all of the caches for memory management
-     */
-    public static function stop_the_insanity() {
-        /**
-         * @var \WP_Object_Cache $wp_object_cache
-         * @var \wpdb $wpdb
-         */
-        global $wpdb, $wp_object_cache;
+	/**
+	 * Clear all of the caches for memory management
+	 */
+	public static function stop_the_insanity() {
+		/**
+		 * @var \WP_Object_Cache $wp_object_cache
+		 * @var \wpdb $wpdb
+		 */
+		global $wpdb, $wp_object_cache;
 
-        $wpdb->queries = array(); // or define( 'WP_IMPORTING', true );
+		$wpdb->queries = array(); // or define( 'WP_IMPORTING', true );
 
-        if ( is_object( $wp_object_cache ) ) {
-            $wp_object_cache->group_ops = array();
-            $wp_object_cache->stats = array();
-            $wp_object_cache->memcache_debug = array();
-            $wp_object_cache->cache = array();
+		if ( is_object( $wp_object_cache ) ) {
+			$wp_object_cache->group_ops = array();
+			$wp_object_cache->stats = array();
+			$wp_object_cache->memcache_debug = array();
+			$wp_object_cache->cache = array();
 
-            if ( method_exists( $wp_object_cache, '__remoteset' ) ) {
-                $wp_object_cache->__remoteset(); // important
-            }
-        }
-    }
+			if ( method_exists( $wp_object_cache, '__remoteset' ) ) {
+				$wp_object_cache->__remoteset(); // important
+			}
+		}
+	}
 
 	/**
 	 * Using the supplied string of post IDs, check to see if those post IDs still map to the correct image IDs
@@ -580,9 +580,6 @@ class Import_Fixer extends WP_CLI_Command {
 	 * [--domain=<domain-to-import-from>]
 	 * : You can specify a single domain to import external images from.
 	 *
-	 * [--protocol=<protocol-of-import-domain>]
-	 * : Protocol for the source site, from where images needs to import. Default is `https`
-	 *
 	 * [--all-domains]
 	 * : Import images from any domain.
 	 *
@@ -603,16 +600,6 @@ class Import_Fixer extends WP_CLI_Command {
 	 *     # Import images from www.example.com.
 	 *     $ wp import-fixer import-external-images --domain=www.example.com
 	 *
-	 *     # Import related path images from example.com
-	 *     # NOTE: This will not work with `--all-domains` argument, as it's required old site's domain to make absolute path.
-	 *     # `--protocol` is optional argument here as default is `https` but if old site is on `http` then needs to pass that.
-	 *     $ wp import-fixer import-external-images --domain=example.com --protocol=http
-	 *
-	 *     # Import related path images from www.example.com
-	 *     # NOTE: This will not work with `--all-domains` argument, as it's required old site's domain to make absolute path.
-	 *     # `--protocol` is optional argument here as default is `https` but if old site is on `http` then needs to pass that.
-	 *     $ wp import-fixer import-external-images --domain=www.example.com --protocol=http
-	 *
 	 *     # Import images from any domain.
 	 *     $ wp import-fixer import-external-images --all-domains
 	 *
@@ -632,8 +619,6 @@ class Import_Fixer extends WP_CLI_Command {
 		$domain_to_import = \WP_CLI\Utils\get_flag_value( $assoc_args, 'domain' );
 		$all_domains = \WP_CLI\Utils\get_flag_value( $assoc_args, 'all-domains' );
 		$post_type = \WP_CLI\Utils\get_flag_value( $assoc_args, 'post_type' );
-
-		$protocol = \WP_CLI\Utils\get_flag_value( $assoc_args, 'protocol', 'https' );
 
 		if( ! empty( $domain_to_import ) && ! empty( $all_domains ) ) {
 			WP_CLI::error( "You can't use --domain and --all-domains." );
@@ -668,7 +653,7 @@ class Import_Fixer extends WP_CLI_Command {
 			$post_types = implode( ',', $post_types );
 			// TODO: Build/run the query
 		} else {
-			$post_ids = $wpdb->get_col( $wpdb->prepare( "SELECT ID FROM $wpdb->posts WHERE post_type = '%s' AND ID = 10024", $post_type ) );
+			$post_ids = $wpdb->get_col( $wpdb->prepare( "SELECT ID FROM $wpdb->posts WHERE post_type = '%s'", $post_type ) );
 		}
 
 		if( empty( $post_ids ) ) {
@@ -681,7 +666,6 @@ class Import_Fixer extends WP_CLI_Command {
 		$all_image_domains = array();
 
 		foreach( $post_ids as $post_id ) {
-
 			//$progress->tick();
 			$post_content = get_post( $post_id )->post_content;
 
@@ -690,24 +674,14 @@ class Import_Fixer extends WP_CLI_Command {
 			}
 
 			preg_match_all( '#<img(.*?)>#si', $post_content, $images );
-			preg_match_all( '#<a(\s+)href="(.*?)</a>#s', $post_content, $links );
-
-			$assets = array_merge( $images[0], $links[0] );
-
-			if( empty( $assets ) ) {
-				WP_CLI::line( "No images here: #$post_id" );
+			if( empty( $images[0] ) ) {
 				continue;
 			}
 
-			foreach( $assets as $image ) {
+			foreach( $images[0] as $image ) {
 				$matches = array();
 				$image_html = $image;
-
-				preg_match( '#href="(.*?)"#i', $image_html, $image_src );
-
-				if ( empty( $image_src[1] ) ) {
-					preg_match( '#src="(.*?)"#i', $image_html, $image_src );
-				}
+				preg_match( '#src="(.*?)"#i', $image_html, $image_src );
 
 				if ( empty( $image_src[1] ) ) {
 					WP_CLI::line( "Image not found in #$post_id" );
@@ -718,8 +692,12 @@ class Import_Fixer extends WP_CLI_Command {
 
 				$current_image_domain = parse_url( $image_src, PHP_URL_HOST );
 
-				$replacement_url = $image_src;
+				//				if( empty( $current_image_domain ) ) {
+				//					WP_CLI::warning( "Encountered badly formatted image src in post #$post_id: $image_src" );
+				//					continue;
+				//				}
 
+				$old_img_src = '';
 				if ( empty( $current_image_domain ) ) {
 
 					if ( empty( $domain_to_import ) ) {
@@ -727,8 +705,8 @@ class Import_Fixer extends WP_CLI_Command {
 						continue;
 					} else {
 
-						$image_src = $protocol . '://' . $domain_to_import . '/' . ltrim( $image_src, '/' );
-
+						$old_img_src = $image_src;
+						$image_src = 'https://' . $domain_to_import . '/' . $image_src;
 						$current_image_domain = $domain_to_import;
 					}
 				}
@@ -759,7 +737,7 @@ class Import_Fixer extends WP_CLI_Command {
 					if( empty( $new_src ) ) {
 						continue;
 					}
-					$post_content = str_replace( $replacement_url, $new_src, $post_content );
+					$post_content = str_replace( $image_src, $new_src, $post_content );
 					$updated = $wpdb->update( $wpdb->posts, array( 'post_content' => $post_content ), array( 'ID' => $post_id ) );
 
 					if( ! empty( $updated ) ) {
@@ -813,38 +791,39 @@ class Import_Fixer extends WP_CLI_Command {
 					$attachment_id = media_handle_sideload( $file_array, $post_id );
 				}
 
+				if ( ! empty( $old_img_src ) ) {
+					$image_src = $old_img_src;
+				}
+
 				if ( ! is_wp_error( $attachment_id ) ) {
 
 					$uploaded_image_src = wp_get_attachment_url( $attachment_id );
 
-					if( empty( $uploaded_image_src ) ) {
+					if ( empty( $uploaded_image_src ) ) {
 						echo " -- Image import failed for '$image_src' on post #$post_id\n";
-						if( is_wp_error( $attachment_id ) ) {
+						if ( is_wp_error( $attachment_id ) ) {
 							var_dump( $attachment_id );
 						}
 						continue;
 					}
 
-					update_post_meta( $attachment_id, '_added_via_script_backup_meta', array(
-						'old_url' => $image_src,
-						'new_url' => $uploaded_image_src,
-					));
+					update_post_meta( $attachment_id, '_added_via_script_backup_meta', array( 'old_url' => $image_src, 'new_url' => $uploaded_image_src, ) );
 
-					$post_content = str_replace( $replacement_url, $uploaded_image_src, $post_content );
+					$post_content = str_replace( $image_src, $uploaded_image_src, $post_content );
+
 					$updated = $wpdb->update( $wpdb->posts, array( 'post_content' => $post_content ), array( 'ID' => $post_id ) );
-					if( ! empty( $updated ) ) {
+					if ( ! empty( $updated ) ) {
 						WP_CLI::line( " -- Imported images for post #$post_id." );
 						WP_CLI::line( "   -- Replaced image source:" );
 						WP_CLI::line( "     -- Old image URL: $image_src" );
 						WP_CLI::line( "     -- New image URL: $uploaded_image_src" );
 					}
-
 				} else {
+
 					WP_CLI::warning( " -- Could not upload image from URL: $image_src." );
 				}
-
 			}
-			usleep( 5000 );
+			usleep( 1000 );
 		}
 
 		if( ! empty( $list_only ) ) {
@@ -977,11 +956,11 @@ class Import_Fixer extends WP_CLI_Command {
 
 			if( ! empty( $meta_backup_urls['old_url'] ) && ! empty( $meta_backup_urls['new_url'] ) ) {
 				$wpdb->query( $wpdb->prepare( "UPDATE $wpdb->posts SET post_content = REPLACE(post_content, %s, %s )", $meta_backup_urls['new_url'], $meta_backup_urls['old_url'] ) );
-					WP_CLI::line( " -- Reverting URL replacements for attachment #$attachment_id.");
-					WP_CLI::line( "   -- Updating {$meta_backup_urls['new_url']}" );
-					WP_CLI::line( "   -- With {$meta_backup_urls['old_url']}  " );
-					WP_CLI::line( "   -- Deleting attachment #$attachment_id." );
-					wp_delete_post( $attachment_id, true );
+				WP_CLI::line( " -- Reverting URL replacements for attachment #$attachment_id.");
+				WP_CLI::line( "   -- Updating {$meta_backup_urls['new_url']}" );
+				WP_CLI::line( "   -- With {$meta_backup_urls['old_url']}  " );
+				WP_CLI::line( "   -- Deleting attachment #$attachment_id." );
+				wp_delete_post( $attachment_id, true );
 			}
 		}
 	}
