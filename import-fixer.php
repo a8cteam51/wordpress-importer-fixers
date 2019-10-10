@@ -690,12 +690,17 @@ class Import_Fixer extends WP_CLI_Command {
 			}
 
 			preg_match_all( '#<img(.*?)>#si', $post_content, $images );
-			preg_match_all( '#<a(\s+)href="(.*?)</a>#s', $post_content, $links );
 
-			$assets = array_merge( $images[0], $links[0] );
+			$assets = $images[0];
+
+			if ( ! empty( $domain_to_import ) ) {
+				preg_match_all( '#<a(\s+)href="(.*?)</a>#s', $post_content, $links );
+
+				$assets = array_merge( $assets, $links[0] );
+			}
 
 			if( empty( $assets ) ) {
-				WP_CLI::line( "No images here: #$post_id" );
+				WP_CLI::line( "No images/assets here: #$post_id" );
 				continue;
 			}
 
@@ -703,7 +708,9 @@ class Import_Fixer extends WP_CLI_Command {
 				$matches = array();
 				$image_html = $image;
 
-				preg_match( '#href="(.*?)"#i', $image_html, $image_src );
+				if ( ! empty( $domain_to_import ) ) {
+					preg_match( '#href="(.*?)"#i', $image_html, $image_src );
+				}
 
 				if ( empty( $image_src[1] ) ) {
 					preg_match( '#src="(.*?)"#i', $image_html, $image_src );
@@ -802,7 +809,7 @@ class Import_Fixer extends WP_CLI_Command {
 					 * The file could have downloaded correctly, but failed to import.
 					 * If it did, delete it.
 					 */
-					if( ! is_wp_error( $file_array['tmp_name'] ) ) {
+					if( ! is_wp_error( $file_array['tmp_name'] ) && ! empty( $file_array['tmp_name'] ) ) {
 						unlink( $file_array['tmp_name'] );
 					}
 
