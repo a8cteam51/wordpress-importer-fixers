@@ -661,12 +661,9 @@ class Import_Fixer extends WP_CLI_Command {
 			// Exclude attachments.
 			unset( $post_types['attachment'] );
 
-			foreach( $post_types as $key => $post_type ) {
-				$post_types[ $key ] = "'$post_type'";
-			}
+			$post_types = "'" . implode( "','", $post_types ) . "'";
 
-			$post_types = implode( ',', $post_types );
-			// TODO: Build/run the query
+			$post_ids = $wpdb->get_col( "SELECT ID FROM $wpdb->posts WHERE post_type IN ( {$post_types} )" );
 		} else {
 			$post_ids = $wpdb->get_col( $wpdb->prepare( "SELECT ID FROM $wpdb->posts WHERE post_type = '%s'", $post_type ) );
 		}
