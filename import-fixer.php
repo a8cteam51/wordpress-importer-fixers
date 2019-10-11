@@ -699,7 +699,7 @@ class Import_Fixer extends WP_CLI_Command {
 				$assets = array_merge( $assets, $links[0] );
 			}
 
-			if( empty( $assets ) ) {
+			if ( empty( $assets ) ) {
 				WP_CLI::line( "No images/assets here: #$post_id" );
 				continue;
 			}
