@@ -757,6 +757,11 @@ class Import_Fixer extends WP_CLI_Command {
 					continue;
 				}
 
+				if ( empty( wp_check_filetype( $image_src )['ext'] ) ) {
+					WP_CLI::line( " -- Image/Asset extension is not valid for '$image_src' on post #$post_id\n" );
+					continue;
+				}
+
 				// Make sure the image wasn't already imported.
 				$post_exists = $wpdb->get_var( $wpdb->prepare( "SELECT post_id FROM $wpdb->postmeta WHERE meta_key = '_added_via_script_backup_meta' AND meta_value LIKE %s", "%{$image_src}%" ) );
 

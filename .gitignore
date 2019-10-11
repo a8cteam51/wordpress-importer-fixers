@@ -1,0 +1,6 @@
+# Local files
+.DS_Store
+.thumbsdb
+.svn
+.idea
+init.sh
