@@ -661,12 +661,9 @@ class Import_Fixer extends WP_CLI_Command {
 			// Exclude attachments.
 			unset( $post_types['attachment'] );
 
-			foreach( $post_types as $key => $post_type ) {
-				$post_types[ $key ] = "'$post_type'";
-			}
+			$post_types = "'" . implode( "','", $post_types ) . "'";
 
-			$post_types = implode( ',', $post_types );
-			// TODO: Build/run the query
+			$post_ids = $wpdb->get_col( "SELECT ID FROM $wpdb->posts WHERE post_type IN ( {$post_types} )" );
 		} else {
 			$post_ids = $wpdb->get_col( $wpdb->prepare( "SELECT ID FROM $wpdb->posts WHERE post_type = '%s'", $post_type ) );
 		}
@@ -691,15 +688,30 @@ class Import_Fixer extends WP_CLI_Command {
 
 			preg_match_all( '#<img(.*?)>#si', $post_content, $images );
 
-			if( empty( $images[0] ) ) {
-				WP_CLI::line( "No images here: #$post_id" );
+			$assets = $images[0];
+
+			if ( ! empty( $domain_to_import ) ) {
+				preg_match_all( '#<a(\s+)href="(.*?)</a>#s', $post_content, $links );
+
+				$assets = array_merge( $assets, $links[0] );
+			}
+
+			if ( empty( $assets ) ) {
+				WP_CLI::line( "No images/assets here: #$post_id" );
 				continue;
 			}
 
-			foreach( $images[0] as $image ) {
+			foreach( $assets as $image ) {
 				$matches = array();
 				$image_html = $image;
-				preg_match( '#src="(.*?)"#i', $image_html, $image_src );
+
+				if ( ! empty( $domain_to_import ) ) {
+					preg_match( '#href="(.*?)"#i', $image_html, $image_src );
+				}
+
+				if ( empty( $image_src[1] ) ) {
+					preg_match( '#src="(.*?)"#i', $image_html, $image_src );
+				}
 
 				if ( empty( $image_src[1] ) ) {
 					WP_CLI::line( "Image not found in #$post_id" );
@@ -719,7 +731,7 @@ class Import_Fixer extends WP_CLI_Command {
 						continue;
 					} else {
 
-						$image_src = $protocol . '://' . $domain_to_import . '/' . $image_src;
+						$image_src = $protocol . '://' . $domain_to_import . '/' . ltrim( $image_src, '/' );
 
 						$current_image_domain = $domain_to_import;
 					}
@@ -739,6 +751,11 @@ class Import_Fixer extends WP_CLI_Command {
 
 				// Bail if this isn't the domain we're looking for or if --all-domains is set.
 				if( ! empty( $domain_to_import ) && $domain_to_import !== $current_image_domain ) {
+					continue;
+				}
+
+				if ( empty( wp_check_filetype( $image_src )['ext'] ) ) {
+					WP_CLI::line( " -- Image/Asset extension is not valid for '$image_src' on post #$post_id\n" );
 					continue;
 				}
 
@@ -794,7 +811,7 @@ class Import_Fixer extends WP_CLI_Command {
 					 * The file could have downloaded correctly, but failed to import.
 					 * If it did, delete it.
 					 */
-					if( ! is_wp_error( $file_array['tmp_name'] ) ) {
+					if( ! is_wp_error( $file_array['tmp_name'] ) && ! empty( $file_array['tmp_name'] ) ) {
 						unlink( $file_array['tmp_name'] );
 					}
 
