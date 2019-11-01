@@ -754,6 +754,12 @@ class Import_Fixer extends WP_CLI_Command {
 					continue;
 				}
 
+				$query_string = parse_url( $image_src, PHP_URL_QUERY );
+
+				if ( ! empty( $query_string ) ) {
+					$image_src = str_replace( '?' . $query_string, '', $image_src );
+				}
+
 				if ( empty( wp_check_filetype( $image_src )['ext'] ) ) {
 					WP_CLI::line( " -- Image/Asset extension is not valid for '$image_src' on post #$post_id\n" );
 					continue;
