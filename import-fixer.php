@@ -718,11 +718,16 @@ class Import_Fixer extends WP_CLI_Command {
 					continue;
 				}
 
-				$image_src = $image_src[1];
+				$replacement_url = $image_src[1];
 
+				$ext = pathinfo( $replacement_url, PATHINFO_EXTENSION );
+
+				if ( empty( $ext ) || false !== strpos( $ext, 'html' ) ) {
+					continue;
+				}
+
+				$image_src            = htmlspecialchars_decode( $replacement_url );
 				$current_image_domain = parse_url( $image_src, PHP_URL_HOST );
-
-				$replacement_url = $image_src;
 
 				if ( empty( $current_image_domain ) ) {
 
