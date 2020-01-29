@@ -718,7 +718,7 @@ class Import_Fixer extends WP_CLI_Command {
 					continue;
 				}
 
-				$replacement_url = $image_src[1];
+				$replacement_url = trim( $image_src[1] );
 
 				$ext = pathinfo( $replacement_url, PATHINFO_EXTENSION );
 
