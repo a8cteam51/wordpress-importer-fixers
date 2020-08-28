@@ -1004,3 +1004,5 @@ class Import_Fixer extends WP_CLI_Command {
 }
 
 WP_CLI::add_command( 'import-fixer', 'Import_Fixer' );
+
+require_once 'link-scanner.php';
