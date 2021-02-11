@@ -4,3 +4,5 @@
 .svn
 .idea
 init.sh
+
+/vendor/

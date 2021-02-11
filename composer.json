@@ -1,0 +1,8 @@
+{
+    "name": "automattic/link-checker",
+    "description": "Scan site for the broken links.",
+    "license": "MIT",
+    "require": {
+        "spatie/crawler": "^4.7.6"
+    }
+}
