@@ -3,9 +3,9 @@
 namespace A8C\HttpStatusCheck;
 
 use GuzzleHttp\RequestOptions;
-use Spatie\Crawler\CrawlAllUrls;
+use Spatie\Crawler\CrawlProfiles\CrawlAllUrls;
 use Spatie\Crawler\Crawler;
-use Spatie\Crawler\CrawlInternalUrls;
+use Spatie\Crawler\CrawlProfiles\CrawlInternalUrls;
 use WP_CLI;
 
 

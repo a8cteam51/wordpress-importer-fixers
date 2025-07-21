@@ -6,7 +6,7 @@ use GuzzleHttp\Exception\RequestException;
 use League\Flysystem\Exception;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\UriInterface;
-use Spatie\Crawler\CrawlObserver;
+use Spatie\Crawler\CrawlObservers\CrawlObserver;
 use Symfony\Component\Console\Output\OutputInterface;
 use WP_CLI;
 
@@ -30,13 +30,13 @@ class CrawlLogger extends CrawlObserver {
 	 *
 	 * @param \Psr\Http\Message\UriInterface $url
 	 */
-	public function willCrawl( UriInterface $url ) {
+	public function willCrawl( UriInterface $url, ?string $linkText = null ): void {
 	}
 
 	/**
 	 * Called when the crawl has ended.
 	 */
-	public function finishedCrawling() {
+	public function finishedCrawling(): void {
 		WP_CLI::log( '' );
 		WP_CLI::log( 'Crawling summary' );
 		WP_CLI::log( '----------------' );
@@ -100,8 +100,9 @@ class CrawlLogger extends CrawlObserver {
 	public function crawled(
 		UriInterface $url,
 		ResponseInterface $response,
-		?UriInterface $foundOnUrl = null
-	) {
+		?UriInterface $foundOnUrl = null,
+		?string $linkText = null
+	): void {
 		if ( $this->addRedirectedResult( $url, $response, $foundOnUrl ) ) {
 			return;
 		}
@@ -118,8 +119,9 @@ class CrawlLogger extends CrawlObserver {
 	public function crawlFailed(
 		UriInterface $url,
 		RequestException $requestException,
-		?UriInterface $foundOnUrl = null
-	) {
+		?UriInterface $foundOnUrl = null,
+		?string $linkText = null
+	): void {
 		if ( $response = $requestException->getResponse() ) {
 			$this->crawled( $url, $response, $foundOnUrl );
 		} else {
