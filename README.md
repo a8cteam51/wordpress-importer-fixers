@@ -1,145 +1,178 @@
 # WordPress Import Fixers
 
-This plugin creates several WP CLI subcommands to assist with the fixing and cleanup from a non-trivial WordPress import.
+WordPress Import Fixers is a WordPress plugin that registers `wp import-fixer`
+WP-CLI subcommands for cleaning up non-trivial WordPress imports, including WXR
+imports used for site merges and partial imports.
+
+The plugin has no wp-admin user interface. It exits unless it is loaded in a
+WP-CLI request.
+
+## Repository Contents
+
+- `import-fixer.php` contains the plugin header, the `Import_Fixer`
+  `WP_CLI_Command` class, and the `wp import-fixer` command registration.
+- `README.md` documents the command behavior and the import metadata each
+  command expects.
+- `.gitignore` excludes local operating-system and IDE files.
+
+There are no Composer, npm, CI, lint, test, build, or deployment files tracked
+in this repository.
+
+## Requirements
+
+- WordPress with WP-CLI available.
+- A WordPress environment where this repository can be installed as a plugin.
+- Imported content metadata required by the command being run, as described
+  below.
 
 ## Installation
 
-The plugin is not currently available in the WordPress.org plugin directory. The best way to install it is to download a ZIP version of the plugin from this GitHub repository, and then upload it to the `plugins` directory of your site. From there, activate the plugin.
+This plugin is not available in the WordPress.org plugin directory. Install it
+by placing this repository in a site's `plugins` directory, then activate the
+plugin.
 
-Because this plugin only adds WP CLI subcommands, there are no user-facing tools in wp-admin.
+Because the plugin only registers WP-CLI commands, there are no user-facing
+tools in wp-admin after activation.
 
-## Commands
+## WP-CLI Commands
 
-Here are the WP CLI commands provided by this plugin. See below for more information about the "origin" concept that is relied on heavily.
+All commands are registered under `wp import-fixer`.
 
-### fix-thumbnails-contextually
+### `fix-thumbnails-contextually`
 
-#### Usage
+```sh
+wp import-fixer fix-thumbnails-contextually [--origin=<import-origin>]
+```
 
-`wp import-fixer fix-thumbnails-contextually --origin=<origin>`
+Fixes featured image references after an import where original post and
+attachment IDs no longer match the IDs assigned on the target site.
 
-#### Description
+The command expects:
 
-This command helps with the scenario where:
+- Posts and attachments to have `_original_import_origin` post meta.
+- Thumbnail attachments to have `_original_post_id` post meta.
+- Posts with thumbnails to have `_original_thumbnail_id` post meta.
 
-* An import WXR file contains posts and attachments
-* Some of the attachments are associated with some of the posts as featured images / thumbnails
-* The unique IDs that connect posts and attachments in the WXR are not the IDs that result in the target site after import, usually because of existing content.
-* Posts are displaying the wrong image as their thumbnail/featured image.
+When `--origin` is supplied, only that import origin is processed. Without it,
+the command processes all origins found in `_original_import_origin` post meta.
 
-The command updates the posts to use the correct thumbnail ID.
+### `fix-galleries-contextually`
 
-It assumes that:
+```sh
+wp import-fixer fix-galleries-contextually [--origin=<import-origin>]
+```
 
-* all posts and attachments have `_original_import_origin` post meta defined
-* all attachments that are thumbnails have `_original_post_id` post meta defined
-* all posts that have thumbnails have `_original_thumbnail_id` post meta defined
+Rewrites `[gallery]` shortcode `ids` values so gallery attachments point to the
+attachments imported into the target site. Before replacing a gallery shortcode,
+the command stores the original shortcode in `_old_gallery_1`, incrementing the
+suffix for additional galleries in the same post.
 
-### fix-galleries-contextually
+The command expects:
 
-#### Usage
+- Posts and attachments to have `_original_import_origin` post meta.
+- Gallery attachments to have `_original_post_id` post meta.
 
-`wp import-fixer fix-galleries-contextually --origin=<origin>`
+When `--origin` is supplied, only that import origin is processed. Without it,
+the command processes all origins found in `_original_import_origin` post meta.
 
-#### Description
+### `fix-media-urls`
 
-This command helps with the scenario where:
+```sh
+wp import-fixer fix-media-urls [--origin=<import-origin>]
+```
 
-* An import WXR file contains posts that have `[gallery]` shortcodes in the content, referencing attachments also in the WXR file.
-* The unique IDs that connect posts and gallery images in the WXR are not the IDs that result in the target site after import, usually because of existing content.
-* Post galleries are displayed with the wrong images.
+Replaces source-site media URLs in post content with the current attachment URLs
+for attachments already imported into the target site. It also handles image URL
+variants with WordPress dimension suffixes such as `-123x456`.
 
-The command updates the posts to use a correct set of attachment IDs in the gallery shortcode. It also stores the original version of the gallery shortcode in the post meta field `_old_gallery_1` (incrementing the value at the end as needed).
+The command expects:
 
-It assumes that:
+- Posts and attachments to have `_original_import_origin` post meta.
+- Attachments to have `_original_import_url` post meta containing the media URL
+  from the source site.
 
-* all posts and attachments have `_original_import_origin` post meta defined
-* all attachments that are used in galleries have `_original_post_id` post meta defined
+When `--origin` is supplied, only that import origin is processed. Without it,
+the command processes all origins found in `_original_import_origin` post meta.
 
-### fix-media-urls
+### `import-external-images`
 
-#### Usage
+```sh
+wp import-fixer import-external-images --list [--post_type=<post-type|any>]
+wp import-fixer import-external-images --domain=<domain> [--protocol=<http|https>] [--post_type=<post-type|any>]
+wp import-fixer import-external-images --all-domains [--post_type=<post-type|any>]
+wp import-fixer import-external-images --rewind
+```
 
-`wp import-fixer fix-media-urls --origin=<origin>`
+Searches post content for external image URLs, sideloads matching images into
+the media library, and replaces the source URLs with the new local attachment
+URLs. It records imported image replacements in `_added_via_script_backup_meta`
+so `--rewind` can reverse replacements and delete attachments imported by this
+command.
 
-#### Description
+Options:
 
-This command helps with the scenario where:
+- `--list` lists external image domains found in post content without importing
+  images.
+- `--domain=<domain>` imports images from one domain.
+- `--protocol=<http|https>` supplies the protocol used when relative image URLs
+  are made absolute for a specified domain. The default is `https`.
+- `--all-domains` imports images from any external domain.
+- `--post_type=<post-type|any>` limits processing to one post type, or uses all
+  public non-attachment post types when set to `any`. The default is `post`.
+- `--rewind` reverses replacements made by this command and deletes attachments
+  imported by it.
 
-* An import WXR file contains posts and attachments.
-* During the resulting import for whatever reason, the post content is not updated to use the new media URL for the imported attachment, instead still referencing the media URL as it existed on the source site.
-* Posts display images as hosted on the source site (or, if said site is down, broken images).
+Use either `--domain` or `--all-domains` when importing. The command does not
+support import origins.
 
-The command scans through all of the attachments imported for the given origin, looks for post content referencing the original media URL, and updates it to the new URL.
+### `fix-post-hierarchy-contextually`
 
-It assumes that:
+```sh
+wp import-fixer fix-post-hierarchy-contextually
+```
 
-* all posts and attachments have `_original_import_origin` post meta defined
-* all attachments have `_original_import_url` post meta defined with the media URL as it existed on the source site
+Fixes post parent references after an import where original parent and child IDs
+no longer match the IDs assigned on the target site.
 
-### import-external-images
+The command expects:
 
-#### Usage
+- Posts to have `_original_import_origin` post meta.
+- Posts to have `_original_post_id` post meta.
+- Posts with parents to have `_original_parent_id` post meta.
 
-`wp import-fixer import-external-images [ --all-domains | --domain=mydomain.com ]`
+This command processes all origins found in `_original_import_origin` post meta.
 
-#### Description
+### `fix-comment-count`
 
-This command helps with the scenario where:
+```sh
+wp import-fixer fix-comment-count
+wp import-fixer fix-comment-count --url=example.test
+```
 
-* An import WXR file contains post content that references image URLs not in the media library.
-* Posts display images as hosted on the original source site (or, if said site is down, broken images).
+Recalculates comment counts for published posts in batches of 500. Use WP-CLI's
+standard `--url` option when running against a specific site in a multisite
+installation.
 
-The command searches post content for external image URLs, attempts to download them into the media library as attachments, and then updates post content to use the new local attachment URL. 
+## Import Origins
 
-You can use these parameters to control its behavior:
+Several commands use an import origin to scope fixes to a specific set of data.
+The origin is the `_original_import_origin` post meta value attached to imported
+posts and attachments.
 
-* `--list` to list all image domains found in post content, but don't take any action.
-* `--all-domains` or `--domain=mydomain.com` to have the importer use all image domains found, or to specify a single domain for importing.
-* `--post_type=myposttype` or `--post_type=any` to have the importer only operate on a specific post type, or to have it operate on all public, non-attachment posts. Default is "post".
-* `--rewind` (experimental!): Reverse image source replacements and delete any imported images previously added with this command.
+The value can be any string, but it should identify the export batch clearly.
+For example:
 
-Note: this command does not yet support the use of origins.
+```text
+20180831154400-myoldsite-201012to201512
+```
 
-### fix-post-hierarchy-contextually
+Using `--origin` where supported is recommended for large sites because it
+limits processing to one import batch. Commands that support `--origin` process
+all discovered origins when the option is omitted.
 
-#### Usage
+## Maintenance Notes
 
-`wp import-fixer fix-post-hierarchy-contextually --origin=<origin>`
-
-#### Description
-
-This command helps with the scenario where:
-
-* An import WXR file contains posts that have parent/child relationships
-* The unique IDs that connect posts with their parents/children in the WXR are not the IDs that result in the target site after import, usually because of existing content.
-* Posts end up with incorrect parent/child posts displayed.
-
-This command updates the posts to use the correct parent/child post ID.
-
-It assumes that:
-
-* all posts have `_original_import_origin` post meta defined
-* all posts have `_original_post_id` post meta defined
-* all posts with a parent post have `_original_parent_id` post meta defined
-
-### fix-comment-count
-    
-#### Usage
-
-* *Single Site*: `wp import-fixer fix-comment-count`
-* *Multi-Site*: `wp import-fixer fix-comment-count --url=example.test`
-
-#### Description
-
-This command fixes comment counts for the published posts.
-
-## About Origins
-
-The concept of an origin here describes a set of data that was exported from the source site at the same time. We use it to update, fix and reconnect information that might otherwise be disconnected or lost during an import into a WordPress site.
-
-This plugin assumes that the export WXR files being generated for importing will include some essential post meta fields in the entries it generates for posts, pages, attachments and other data. This plugin does not handle the process of generating an export with this and related post meta fields - we leave that as an exercise to the reader, although other tools to help with that are forthcoming. The most important is the origin field, which the plugin expects to be in `_original_import_origin`.
-
-The value of the origin field can be any string you want, but we suggest using something that indicates the date and even time of the export it represents, and for delta exports, the period of time that the included content covers. An example might be `20180831154400-myoldsite-201012to201512`.
-
-We recommend always specifying an origin when running the above commands. Otherwise, they will likely cycle through all available origins, which could take a very long time on large sites.
+- Keep command documentation aligned with the docblocks and implementations in
+  `import-fixer.php`.
+- The repository does not include automated tests or linting configuration.
+- No license file or package metadata is tracked in this repository.
